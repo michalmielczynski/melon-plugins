@@ -13,11 +13,15 @@ Rectangle {
   property string mod: ""
   property bool held: false
   property bool isKey: false
+  // Compact mode sizes the pill to fit inside the bar (barSize height) when
+  // the pills are rendered inline in the top bar rather than in a floating
+  // panel.
+  property bool compact: false
 
   readonly property bool isMod: mod === "ctrl" || mod === "shift" || mod === "alt" || mod === "super"
 
-  implicitWidth: label.implicitWidth + Style.space(9)
-  implicitHeight: label.implicitHeight + Style.space(6)
+  implicitWidth: label.implicitWidth + (root.compact ? Style.space(5) : Style.space(9))
+  implicitHeight: label.implicitHeight + (root.compact ? Style.space(3) : Style.space(6))
   radius: Style.cornerRadius
 
   // Opaque, theme-aware background so pills are fully readable on any theme.
@@ -36,7 +40,7 @@ Rectangle {
       ? (root.held ? Color.accent : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.85))
       : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 1.0)
     font.family: Style.font.family
-    font.pixelSize: Style.font.body
+    font.pixelSize: root.compact ? Style.font.bodySmall : Style.font.body
     font.bold: root.isKey || root.isMod
   }
 }

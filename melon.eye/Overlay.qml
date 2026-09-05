@@ -90,7 +90,6 @@ Item {
         required property var modelData
         readonly property var screen: modelData
         RingLayer { screen: screenRoot.screen }
-        KeyPanel { screen: screenRoot.screen }
       }
     }
   }
