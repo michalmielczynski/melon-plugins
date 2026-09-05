@@ -84,6 +84,7 @@ Item {
     anchors.centerIn: parent
     width: root.barBase + Math.min(keys.implicitWidth, root.maxPills)
     height: root.barBase
+    Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
     Item {
       id: eyeVisual
