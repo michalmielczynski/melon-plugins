@@ -28,8 +28,8 @@ Rectangle {
     : mod === "alt" ? "⌥"
     : mod === "super" ? "⌘" : mod
 
-  implicitWidth: label.implicitWidth + (root.compact ? Style.space(5) : Style.space(9))
-  implicitHeight: label.implicitHeight + (root.compact ? Style.space(3) : Style.space(6))
+  implicitWidth: textLabel.implicitWidth + (root.compact ? Style.space(5) : Style.space(9))
+  implicitHeight: textLabel.implicitHeight + (root.compact ? Style.space(3) : Style.space(6))
   radius: Style.cornerRadius
 
   readonly property bool topAccent: root.isMod || root.combo
@@ -42,7 +42,7 @@ Rectangle {
     : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.45)
 
   Text {
-    id: label
+    id: textLabel
     anchors.centerIn: parent
     text: root.label !== "" ? root.label : (root.isMod ? root.modIcon : root.mod)
     color: root.topAccent
