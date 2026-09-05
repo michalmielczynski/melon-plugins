@@ -1233,9 +1233,10 @@ Item {
 
         BarIsland {
           anchors.left: parent.left
-          // Align the island's outer left edge with the windows below (their
-          // edge sits at Hyprland gaps_out, which is 2 * Style.gapsOut).
-          anchors.leftMargin: Style.gapsOut * 2
+          // Align the island's outer left edge with the windows below: a
+          // tiled master window's left edge sits at gaps_out (10) plus the
+          // inner gap/border (scroll layout), measured at ~16 px logical.
+          anchors.leftMargin: Style.gapsOut * 2 + 6
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           entries: root.layoutEntries("left")
@@ -1252,8 +1253,9 @@ Item {
 
         BarIsland {
           anchors.right: parent.right
-          // Align the island's outer right edge with the windows' right edge.
-          anchors.rightMargin: Style.gapsOut * 2
+          // Align the island's outer right edge with the windows' right edge
+          // (measured ~12 px gap, i.e. gaps_out + border).
+          anchors.rightMargin: Style.gapsOut * 2 + 2
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           entries: root.layoutEntries("right")
