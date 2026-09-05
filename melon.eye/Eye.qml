@@ -98,15 +98,17 @@ Item {
         yScale: 1
       }
 
+      // ON = negative: solid black sclera + white pupil. OFF = current: a
+      // subtle outline + dimmed pupil (the resting eye).
       Rectangle {
         id: sclera
         anchors.centerIn: parent
         width: root.slotSize - Style.space(2)
         height: root.slotSize - Style.space(2)
         radius: width / 2
-        color: "transparent"
-        border.width: Math.max(1, Style.spaceReal(1))
-        border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, root.tracking ? 0.55 : 0.25)
+        color: root.tracking ? Qt.rgba(0, 0, 0, 1) : "transparent"
+        border.width: root.tracking ? 0 : Math.max(1, Style.spaceReal(1))
+        border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.25)
       }
 
       Rectangle {
@@ -114,7 +116,7 @@ Item {
         width: root.slotSize * 0.30
         height: root.slotSize * 0.30
         radius: width / 2
-        color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, root.tracking ? 0.95 : 0.35)
+        color: root.tracking ? Qt.rgba(1, 1, 1, 1) : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.35)
         x: root.slotSize / 2 - width / 2 + root.pupilX
         y: root.slotSize / 2 - height / 2 + root.pupilY
 
