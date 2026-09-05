@@ -81,7 +81,9 @@ Item {
   // ---- visuals: eye (centred in the icon slot) + live key pills to its right ----
   Item {
     id: layout
-    anchors.centerIn: parent
+    // Left-anchored (not centred): the eye stays put and key pills grow right.
+    anchors.left: parent.left
+    anchors.verticalCenter: parent.verticalCenter
     width: root.barBase + Math.min(keys.implicitWidth, root.maxPills)
     height: root.barBase
     Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
