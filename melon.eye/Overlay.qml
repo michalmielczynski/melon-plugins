@@ -34,10 +34,6 @@ Item {
     stderr: SplitParser { splitMarker: "\n" }
   }
   Connections {
-    target: helper.stderr
-    function onRead(line) { console.log("helper stderr: " + String(line)) }
-  }
-  Connections {
     target: helper.stdout
     function onRead(line) { root.onHelperLine(String(line).trim()) }
   }
