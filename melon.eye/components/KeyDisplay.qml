@@ -78,23 +78,23 @@ Item {
           if (age * 50 <= root.holdMs) return 1
           return Math.max(0, 1 - (age * 50 - root.holdMs) / root.fadeMs)
         }
-        implicitWidth: grpRow.implicitWidth
-        implicitHeight: grpRow.implicitHeight
 
-        Row {
-          id: grpRow
-          spacing: root.gap
-
-          Repeater {
-            model: mods ? mods.split(",") : []
-            delegate: Pill {
-              required property string modelData
-              mod: modelData
-              held: false
-              compact: true
-            }
+        // Combined label, e.g. "⌃+⇧+S" (or just "S" with no modifiers).
+        readonly property string comboLabel: {
+          var arr = mods ? mods.split(",") : []
+          var s = ""
+          for (var i = 0; i < arr.length; i++) {
+            var m = arr[i]
+            s += (m === "ctrl" ? "⌃" : m === "shift" ? "⇧" : m === "alt" ? "⌥" : m === "super" ? "⌘" : m) + "+"
           }
-          Pill { mod: name; isKey: true; compact: true }
+          return s + name
+        }
+
+        Pill {
+          label: comboLabel
+          combo: mods !== ""
+          isKey: mods === ""
+          compact: true
         }
       }
     }
