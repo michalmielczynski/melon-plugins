@@ -67,8 +67,6 @@ Item {
         }
       }
     } else if (parts[0] === "K" && parts.length >= 2 && EyeState.tracking) {
-      // Key pills only when the eye (and click rings) are on; when off we
-      // stay quiet and don't touch the key state.
       var mods = parts.length >= 3 ? parts[2] : ""
       EyeState.notifyKey(parts[1], mods)
     } else if (parts[0] === "M" && parts.length === 3 && EyeState.tracking) {
