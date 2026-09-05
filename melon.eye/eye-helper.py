@@ -40,6 +40,57 @@ DEBUG = os.environ.get("MELON_EYE_DEBUG") == "1"
 KEYS_ABS = ec.EV_ABS
 KEY_MAP = ec.ecodes.get("KEY_A")
 
+# display names for named keys (letters/digits/F-keys handled generically)
+NAMED_KEYS = {
+    ec.KEY_ENTER: "Enter", ec.KEY_BACKSPACE: "Backspace", ec.KEY_SPACE: "Space",
+    ec.KEY_TAB: "Tab", ec.KEY_ESC: "Esc", ec.KEY_DELETE: "Del",
+    ec.KEY_UP: "↑", ec.KEY_DOWN: "↓", ec.KEY_LEFT: "←", ec.KEY_RIGHT: "→",
+    ec.KEY_HOME: "Home", ec.KEY_END: "End", ec.KEY_PAGEUP: "PgUp",
+    ec.KEY_PAGEDOWN: "PgDn", ec.KEY_INSERT: "Ins", ec.KEY_CAPSLOCK: "Caps",
+    ec.KEY_PRINT: "PrtSc", ec.KEY_PAUSE: "Pause", ec.KEY_MENU: "Menu",
+    ec.KEY_KPENTER: "Enter", ec.KEY_KPPLUS: "+", ec.KEY_KPMINUS: "-",
+    ec.KEY_KPASTERISK: "*", ec.KEY_KPSLASH: "/",
+}
+
+MOD_KEYS = {
+    ec.KEY_LEFTCTRL: "ctrl", ec.KEY_RIGHTCTRL: "ctrl",
+    ec.KEY_LEFTSHIFT: "shift", ec.KEY_RIGHTSHIFT: "shift",
+    ec.KEY_LEFTALT: "alt", ec.KEY_RIGHTALT: "alt",
+    ec.KEY_LEFTMETA: "super", ec.KEY_RIGHTMETA: "super",
+}
+
+
+def key_display(code):
+    """evdev keycode -> short display name, or None for unnamed."""
+    if code in NAMED_KEYS:
+        return NAMED_KEYS[code]
+    if 30 <= code <= 57:  # KEY_A (30) .. KEY_0 (11) region? letters A-Z = 30..44
+        try:
+            n = ec.KEY[code]
+        except Exception:
+            return None
+        if n.startswith("KEY_"):
+            sym = n[4:]
+            if len(sym) == 1 and sym.isalpha():
+                return sym.upper()
+    if 2 <= code <= 11:  # KEY_1..KEY_9, KEY_0
+        try:
+            n = ec.KEY[code]
+        except Exception:
+            return None
+        if n.startswith("KEY_"):
+            digits = n[4:]
+            if digits.isdigit():
+                return digits
+    if 59 <= code <= 70 or 112 <= code <= 115:  # KEY_F1..F12
+        try:
+            n = ec.KEY[code]
+        except Exception:
+            return None
+        if n.startswith("KEY_F"):
+            return n[4:]
+    return None
+
 
 def find_ipc_socket():
     runtime = os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")
@@ -155,11 +206,17 @@ def click_loop():
     dwt_enabled = option_bool("input:touchpad:disable-while-typing")
     key_until = 0.0
     last_dwt_check = 0.0
+    held_mods = set()
 
     def emit_click(code):
         pos = query_cursor()
         if pos:
             print("C %d %d %s" % (pos[0], pos[1], code), flush=True)
+
+    MOD_ORDER = ["ctrl", "alt", "shift", "super"]
+
+    def mods_str():
+        return ",".join(m for m in MOD_ORDER if m in held_mods)
 
     while True:
         ready, _, _ = select.select(list(fds), [], [], 1.0)
@@ -183,9 +240,22 @@ def click_loop():
             for ev in events:
                 if ev.type == ec.EV_KEY:
                     if is_kbd:
+                        if ev.code in MOD_KEYS:
+                            mod = MOD_KEYS[ev.code]
+                            if ev.value == 1:
+                                held_mods.add(mod)
+                                key_until = now + DWT_MS / 1000.0
+                                print("M %s 1" % mod, flush=True)
+                            else:
+                                held_mods.discard(mod)
+                                print("M %s 0" % mod, flush=True)
+                            continue
                         # a key press arms the typing suppression window
                         if ev.value == 1:
                             key_until = now + DWT_MS / 1000.0
+                            name = key_display(ev.code)
+                            if name:
+                                print("K %s %s" % (name, mods_str()), flush=True)
                         continue
                     if ev.value == 1:
                         if ev.code == ec.BTN_LEFT:

@@ -1,0 +1,5 @@
+module components
+
+KeyPanel 1.0 KeyPanel.qml
+Pill 1.0 Pill.qml
+RingLayer 1.0 RingLayer.qml

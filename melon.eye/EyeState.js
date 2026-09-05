@@ -18,3 +18,27 @@ function notifyClick(color) {
   ringColor = color
   ringSeq += 1
 }
+
+// --- key display state -------------------------------------------------------
+// The helper emits "K <name> <mods>" and "M <mod> <0|1>"; the overlay updates
+// these and the key panel polls them. heldMods is a comma list of held
+// modifiers; each key press bumps keySeq with the key's name + mods.
+var keySeq = 0
+var keyName = ""
+var keyMods = ""
+var heldMods = ""
+
+function notifyKey(name, mods) {
+  keyName = name
+  keyMods = mods
+  heldMods = mods
+  keySeq += 1
+}
+
+function notifyMod(mod, down) {
+  var set = heldMods ? heldMods.split(",") : []
+  var has = set.indexOf(mod) !== -1
+  if (down && !has) set.push(mod)
+  if (!down && has) set.splice(set.indexOf(mod), 1)
+  heldMods = set.join(",")
+}

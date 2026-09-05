@@ -70,19 +70,27 @@ Item {
           }
         }
       }
+    } else if (parts[0] === "K" && parts.length >= 2) {
+      var mods = parts.length >= 3 ? parts[2] : ""
+      EyeState.notifyKey(parts[1], mods)
+    } else if (parts[0] === "M" && parts.length === 3) {
+      EyeState.notifyMod(parts[1], parts[2] === "1")
     }
   }
 
   Component.onDestruction: helper.running = false
 
-  // ---- one ring layer per screen ----
+  // ---- one ring layer + key panel per screen ----
   Variants {
     model: Quickshell.screens
 
     delegate: Component {
-      RingLayer {
+      Item {
+        id: screenRoot
         required property var modelData
-        screen: modelData
+        readonly property var screen: modelData
+        RingLayer { screen: screenRoot.screen }
+        KeyPanel { screen: screenRoot.screen }
       }
     }
   }
