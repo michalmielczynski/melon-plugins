@@ -33,11 +33,21 @@ def find_ipc_socket():
 
 SOCK = find_ipc_socket()
 
+# Self-healing lifecycle: when the parent (omarchy-shell) dies or the widget is
+# destroyed, we get reparented to init — exit instead of lingering as an orphan.
+PARENT_PID = os.getppid()
+
+
+def parent_alive():
+    return os.getppid() == PARENT_PID
+
 
 def cursor_loop():
     """Poll Hyprland IPC for the cursor position. Hyprland closes the
     connection after every response, so connect/query/close per cycle."""
     while True:
+        if not parent_alive():
+            os._exit(0)
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.settimeout(1.0)
@@ -71,7 +81,9 @@ def click_loop():
         return
     fds = {dev.fd: dev for dev in devices}
     while True:
-        ready, _, _ = select.select(list(fds), [], [])
+        ready, _, _ = select.select(list(fds), [], [], 1.0)
+        if not parent_alive():
+            os._exit(0)
         for fd in ready:
             try:
                 events = fds[fd].read()

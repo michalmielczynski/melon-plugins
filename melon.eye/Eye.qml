@@ -31,6 +31,10 @@ Item {
   implicitWidth: slotSize
   implicitHeight: slotSize
 
+  // Kill the helper when the widget goes away (shell restart, layout change),
+  // so it never lingers as an orphaned process.
+  Component.onDestruction: helper.running = false
+
   // ---- helper: cursor position + mouse clicks via stdout lines ----
   Process {
     id: helper
