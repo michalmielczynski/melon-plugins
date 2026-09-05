@@ -6,15 +6,15 @@ Lines:
   C <x> <y> <code> click (L/R/M) WITH the cursor position captured at the
                    moment of the click — the ring spawns exactly there.
 
-Tap detection reads raw evdev touch events and tries to agree with what the
-system (libinput) considers a tap-to-click:
-  - the touch is short (<= TAP_MAX_S),
-  - the finger barely moves (<= TAP_MAX_MOVE_MM, converted via the device
-    resolution so it is resolution-independent),
-  - tap-to-click is enabled on the system (Hyprland),
-  - dedup against a physical button press.
+Agreement with the system:
+  - taps are detected like libinput (short, minimal movement in mm,
+    gated on tap-to-click),
+  - while the system has the touchpad disabled during typing
+    (input:touchpad:disable-while-typing), touchpad taps/clicks are
+    suppressed so the eye does not ring on clicks the system ignores.
 
-Set MELON_EYE_DEBUG=1 to log tap candidates so thresholds can be calibrated.
+Set MELON_EYE_DEBUG=1 to log tap candidates; MELON_EYE_DWT_MS to tune the
+re-enable window (default 1000 ms).
 """
 import glob
 import json
@@ -33,7 +33,12 @@ ec = evdev.ecodes
 TAP_MAX_S = 0.25
 TAP_MAX_MOVE_MM = 5.0
 PHYS_DEDUP_S = 0.15
+DWT_MS = int(os.environ.get("MELON_EYE_DWT_MS", "1000"))
 DEBUG = os.environ.get("MELON_EYE_DEBUG") == "1"
+
+# device capability groups
+KEYS_ABS = ec.EV_ABS
+KEY_MAP = ec.ecodes.get("KEY_A")
 
 
 def find_ipc_socket():
@@ -55,14 +60,17 @@ def parent_alive():
     return os.getppid() == PARENT_PID
 
 
-def tap_to_click_enabled():
+def read_option(key):
     try:
-        out = subprocess.run(
-            ["hyprctl", "getoption", "input:touchpad:tap-to-click"],
-            capture_output=True, text=True, timeout=3)
-        return "true" in out.stdout.lower()
+        out = subprocess.run(["hyprctl", "getoption", key],
+                             capture_output=True, text=True, timeout=3)
+        return out.stdout
     except Exception:
-        return True
+        return ""
+
+
+def option_bool(key):
+    return "true" in read_option(key).lower()
 
 
 def query_cursor():
@@ -96,19 +104,24 @@ def cursor_loop():
         time.sleep(0.05)
 
 
-def click_loop(ttc):
-    buttons = []
-    touchpads = {}  # fd -> (dev, resx, resy)
-
+def classify_devices():
+    """Return (keyboards, mice, touchpads). Keyboards have many KEY_* and
+    no BTN_LEFT/BTN_TOUCH; mice have physical buttons; touchpads have
+    BTN_TOUCH + ABS."""
+    keyboards = []
+    mice = []
+    touchpads = {}
     for path in evdev.list_devices():
         try:
             dev = evdev.InputDevice(path)
         except OSError:
             continue
-        caps = dev.capabilities().get(ec.EV_KEY, [])
-        if ec.BTN_LEFT in caps or ec.BTN_RIGHT in caps or ec.BTN_MIDDLE in caps:
-            buttons.append(dev)
-        if ec.BTN_TOUCH in caps and ec.EV_ABS in dev.capabilities():
+        keys = dev.capabilities().get(ec.EV_KEY, [])
+        has_btn = ec.BTN_LEFT in keys or ec.BTN_RIGHT in keys or ec.BTN_MIDDLE in keys
+        has_touch = ec.BTN_TOUCH in keys
+        has_abs = ec.EV_ABS in dev.capabilities()
+        letters = sum(1 for c in keys if 30 <= c <= 51)  # KEY_A..KEY_Z
+        if has_touch and has_abs:
             resx = resy = 31.0
             for code, inf in dev.capabilities().get(ec.EV_ABS, []):
                 if code == ec.ABS_X and inf.resolution:
@@ -116,9 +129,19 @@ def click_loop(ttc):
                 elif code == ec.ABS_Y and inf.resolution:
                     resy = float(inf.resolution)
             touchpads[dev.fd] = (dev, resx, resy)
+        elif has_btn:
+            mice.append(dev)
+        elif letters >= 5:
+            keyboards.append(dev)
+    return keyboards, mice, touchpads
 
-    fds = {dev.fd: dev for dev in buttons}
+
+def click_loop():
+    keyboards, mice, touchpads = classify_devices()
+
+    fds = {dev.fd: dev for dev in mice}
     fds.update({dev.fd: dev for dev, _, _ in touchpads.values()})
+    fds.update({dev.fd: dev for dev in keyboards})
 
     tool_fingers = {
         ec.BTN_TOOL_FINGER: 1,
@@ -128,8 +151,10 @@ def click_loop(ttc):
     }
 
     last_btn = 0.0
-    # per-fd touch state: t0, sx, sy, cx, cy, fingers
-    touch = {}
+    touch = {}  # fd -> [t0, sx, sy, cx, cy, fingers]
+    dwt_enabled = option_bool("input:touchpad:disable-while-typing")
+    key_until = 0.0
+    last_dwt_check = 0.0
 
     def emit_click(code):
         pos = query_cursor()
@@ -141,24 +166,42 @@ def click_loop(ttc):
         if not parent_alive():
             os._exit(0)
         now = time.monotonic()
+
+        # refresh the DWT-enabled config periodically
+        if now - last_dwt_check > 3.0:
+            dwt_enabled = option_bool("input:touchpad:disable-while-typing")
+            last_dwt_check = now
+
         for fd in ready:
             try:
                 events = fds[fd].read()
             except OSError:
                 continue
             is_touch = fd in touchpads
+            is_kbd = fd in {dev.fd for dev in keyboards}
             rx, ry = (touchpads[fd][1], touchpads[fd][2]) if is_touch else (31.0, 31.0)
             for ev in events:
                 if ev.type == ec.EV_KEY:
+                    if is_kbd:
+                        # a key press arms the typing suppression window
+                        if ev.value == 1:
+                            key_until = now + DWT_MS / 1000.0
+                        continue
                     if ev.value == 1:
                         if ev.code == ec.BTN_LEFT:
                             last_btn = now
+                            if is_touch and dwt_enabled and now < key_until:
+                                continue  # system ignores the touchpad while typing
                             emit_click("L")
                         elif ev.code == ec.BTN_RIGHT:
                             last_btn = now
+                            if is_touch and dwt_enabled and now < key_until:
+                                continue
                             emit_click("R")
                         elif ev.code == ec.BTN_MIDDLE:
                             last_btn = now
+                            if is_touch and dwt_enabled and now < key_until:
+                                continue
                             emit_click("M")
                     if is_touch and ev.code == ec.BTN_TOUCH:
                         if ev.value == 1:
@@ -168,16 +211,18 @@ def click_loop(ttc):
                             if st is not None:
                                 t0, sx, sy, cx, cy, fingers = st
                                 dur = now - t0
-                                if sx is not None and cx is not None:
-                                    dist = math.hypot((cx - sx) / rx, (cy - sy) / ry)
-                                else:
-                                    dist = 0.0
+                                dist = (math.hypot((cx - sx) / rx, (cy - sy) / ry)
+                                        if sx is not None and cx is not None else 0.0)
                                 if DEBUG:
-                                    print("tapcand dur=%.0fms dist=%.2fmm f=%d" %
-                                          (dur * 1000, dist, fingers), flush=True)
-                                if (_short_tap(dur, dist, fingers)
+                                    print("tapcand dur=%.0fms dist=%.2fmm f=%d dwt=%s" %
+                                          (dur * 1000, dist, fingers, dwt_enabled),
+                                          flush=True)
+                                suppress = (dwt_enabled and now < key_until)
+                                if (dur <= TAP_MAX_S
+                                        and dist <= TAP_MAX_MOVE_MM
                                         and (now - last_btn) > PHYS_DEDUP_S
-                                        and ttc):
+                                        and not suppress
+                                        and option_bool("input:touchpad:tap-to-click")):
                                     emit_click("L" if fingers <= 1 else "R")
                                 touch.pop(fd, None)
                     elif is_touch and ev.code in tool_fingers:
@@ -198,10 +243,6 @@ def click_loop(ttc):
                             st[4] = ev.value
 
 
-def _short_tap(dur, dist_mm, fingers):
-    return dur <= TAP_MAX_S and dist_mm <= TAP_MAX_MOVE_MM
-
-
 if SOCK:
     threading.Thread(target=cursor_loop, daemon=True).start()
-click_loop(tap_to_click_enabled())
+click_loop()
