@@ -1253,10 +1253,11 @@ Item {
 
         BarIsland {
           anchors.right: parent.right
-          // Align the island's outer right edge with the windows' right edge.
-          // The window's frame (active border) sits at ~11 px gap; the island
-          // border must land on it to look flush.
-          anchors.rightMargin: Style.gapsOut * 2 + 1
+          // Mirror the left island so the bar's outer edges are symmetric.
+          // A full-width primary window sits at gap ~17 (kitty) on both
+          // sides; the left island (gapOuts*2+6=16) aligns within 1px, so the
+          // right one does too at gap 16.
+          anchors.rightMargin: Style.gapsOut * 2 + 6
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           entries: root.layoutEntries("right")
