@@ -38,24 +38,32 @@ Item {
   }
 
   function onHelperLine(line) {
-    if (line.charAt(0) === "P") {
-      var parts = line.split(" ")
-      if (parts.length === 3) {
-        var px = Number(parts[1])
-        var py = Number(parts[2])
-        if (isFinite(px) && isFinite(py)) {
-          EyeState.cursorX = px
-          EyeState.cursorY = py
-        }
+    var parts = line.split(" ")
+    if (parts[0] === "P" && parts.length === 3) {
+      var px = Number(parts[1])
+      var py = Number(parts[2])
+      if (isFinite(px) && isFinite(py)) {
+        EyeState.cursorX = px
+        EyeState.cursorY = py
       }
-    } else if (EyeState.tracking) {
-      // Click rings only when tracking is on.
-      if (line === "L") {
-        EyeState.notifyClick(String(Color.accent))
-      } else if (line === "R") {
-        EyeState.notifyClick(String(Color.urgent))
-      } else if (line === "M") {
-        EyeState.notifyClick(String(Color.foreground))
+    } else if (parts[0] === "C" && parts.length === 4) {
+      // Click with the cursor position captured at the click moment: update
+      // the position first so the ring spawns exactly under the cursor.
+      var cx = Number(parts[1])
+      var cy = Number(parts[2])
+      if (isFinite(cx) && isFinite(cy)) {
+        EyeState.cursorX = cx
+        EyeState.cursorY = cy
+        if (EyeState.tracking) {
+          var code = parts[3]
+          if (code === "L") {
+            EyeState.notifyClick(String(Color.accent))
+          } else if (code === "R") {
+            EyeState.notifyClick(String(Color.urgent))
+          } else if (code === "M") {
+            EyeState.notifyClick(String(Color.foreground))
+          }
+        }
       }
     }
   }

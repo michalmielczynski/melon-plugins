@@ -2,12 +2,13 @@
 """melon.eye helper: emits cursor position and mouse clicks/taps to stdout.
 
 Lines:
-  P <x> <y>    cursor position in global layout coords (polled via Hyprland IPC)
-  L / R / M    mouse click: physical buttons AND touchpad tap-to-click taps
+  P <x> <y>        cursor position in global layout coords (polled ~20 Hz)
+  C <x> <y> <code> click (L/R/M) WITH the cursor position captured at the
+                   moment of the click — the ring spawns exactly there.
 
-Tap detection is done from raw evdev touch events (BTN_TOUCH + finger count +
-duration + movement), because libinput synthesises tap-clicks above the evdev
-layer, so taps never show up as BTN_LEFT in /dev/input.
+Tap detection reads raw evdev touch events (BTN_TOUCH + finger count +
+duration + movement), because libinput synthesises tap-clicks above the
+evdev layer, so taps never show up as BTN_LEFT in /dev/input.
 """
 import glob
 import json
@@ -22,9 +23,9 @@ import evdev
 
 ec = evdev.ecodes
 
-TAP_MAX_S = 0.25        # a tap is a touch shorter than this
-TAP_MAX_MOVE = 200.0    # device units (~10 mm on a typical touchpad)
-PHYS_DEDUP_S = 0.3      # ignore a tap right after a physical button press
+TAP_MAX_S = 0.35        # a tap is a touch shorter than this
+TAP_MAX_MOVE = 350.0    # device units (~18 mm on a typical touchpad)
+PHYS_DEDUP_S = 0.15     # ignore a tap right after a physical button press
 
 
 def find_ipc_socket():
@@ -49,29 +50,38 @@ def parent_alive():
     return os.getppid() == PARENT_PID
 
 
+def query_cursor():
+    """One-shot Hyprland IPC query for the cursor position. Hyprland closes
+    the connection after every response, so connect/query/close per call."""
+    if not SOCK:
+        return None
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(1.0)
+        s.connect(SOCK)
+        s.sendall(b"j/cursorpos")
+        data = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        s.close()
+        obj = json.loads(data.decode())
+        return int(obj["x"]), int(obj["y"])
+    except Exception:
+        return None
+
+
 def cursor_loop():
-    """Poll Hyprland IPC for the cursor position. Hyprland closes the
-    connection after every response, so connect/query/close per cycle."""
+    """Poll Hyprland IPC for the cursor position (~20 Hz)."""
     while True:
         if not parent_alive():
             os._exit(0)
-        try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.settimeout(1.0)
-            s.connect(SOCK)
-            s.sendall(b"j/cursorpos")
-            data = b""
-            while True:
-                chunk = s.recv(4096)
-                if not chunk:
-                    break
-                data += chunk
-            s.close()
-            obj = json.loads(data.decode())
-            print("P %d %d" % (obj["x"], obj["y"]), flush=True)
-        except Exception:
-            pass
-        time.sleep(0.05)  # ~20 Hz
+        pos = query_cursor()
+        if pos:
+            print("P %d %d" % pos, flush=True)
+        time.sleep(0.05)
 
 
 def click_loop():
@@ -103,8 +113,12 @@ def click_loop():
         ec.BTN_TOOL_QUADTAP: 4,
     }
 
-    def emit(code):
-        print(code, flush=True)
+    def emit_click(code):
+        # Fresh cursor position AT the click, so the ring lands exactly under
+        # the cursor even when it was moving.
+        pos = query_cursor()
+        if pos:
+            print("C %d %d %s" % (pos[0], pos[1], code), flush=True)
 
     while True:
         ready, _, _ = select.select(list(fds), [], [], 1.0)
@@ -122,13 +136,13 @@ def click_loop():
                     if ev.value == 1:
                         if ev.code == ec.BTN_LEFT:
                             last_btn = now
-                            emit("L")
+                            emit_click("L")
                         elif ev.code == ec.BTN_RIGHT:
                             last_btn = now
-                            emit("R")
+                            emit_click("R")
                         elif ev.code == ec.BTN_MIDDLE:
                             last_btn = now
-                            emit("M")
+                            emit_click("M")
                     if is_touch:
                         if ev.code == ec.BTN_TOUCH:
                             if ev.value == 1:
@@ -144,7 +158,8 @@ def click_loop():
                                     if (dur <= TAP_MAX_S
                                             and dist <= TAP_MAX_MOVE
                                             and (now - last_btn) > PHYS_DEDUP_S):
-                                        emit("L" if touch_fingers <= 1 else "R")
+                                        emit_click("L" if touch_fingers <= 1
+                                                   else "R")
                                     touch_t0 = None
                         elif ev.code in tool_fingers:
                             if ev.value == 1:
