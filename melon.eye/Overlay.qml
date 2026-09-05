@@ -28,9 +28,14 @@ Item {
   // off (off only dims the eye and disables the click rings).
   Process {
     id: helper
-    command: ["python3", root.helperPath]
+    command: ["/usr/bin/python3", root.helperPath]
     running: true
     stdout: SplitParser { splitMarker: "\n" }
+    stderr: SplitParser { splitMarker: "\n" }
+  }
+  Connections {
+    target: helper.stderr
+    function onRead(line) { console.log("helper stderr: " + String(line)) }
   }
   Connections {
     target: helper.stdout

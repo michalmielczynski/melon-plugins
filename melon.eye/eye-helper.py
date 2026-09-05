@@ -118,7 +118,7 @@ def click_loop(ttc):
             touchpads[dev.fd] = (dev, resx, resy)
 
     fds = {dev.fd: dev for dev in buttons}
-    fds.update(touchpads)
+    fds.update({dev.fd: dev for dev, _, _ in touchpads.values()})
 
     tool_fingers = {
         ec.BTN_TOOL_FINGER: 1,
