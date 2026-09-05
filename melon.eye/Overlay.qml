@@ -24,21 +24,13 @@ Item {
   readonly property string helperPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/melon.eye/eye-helper.py"
 
   // ---- helper: cursor position + mouse clicks via stdout lines ----
+  // Runs always: the eye's pupil follows the cursor even when tracking is
+  // off (off only dims the eye and disables the click rings).
   Process {
     id: helper
     command: ["python3", root.helperPath]
-    stdout: SplitParser { splitMarker: "\n" }
-  }
-  // EyeState.tracking is a plain JS var (not bindable), so sync via a timer.
-  Timer {
-    id: trackingSync
-    interval: 250
-    repeat: true
     running: true
-    onTriggered: {
-      var want = EyeState.tracking ? true : false
-      if (helper.running !== want) helper.running = want
-    }
+    stdout: SplitParser { splitMarker: "\n" }
   }
   Connections {
     target: helper.stdout
@@ -56,12 +48,15 @@ Item {
           EyeState.cursorY = py
         }
       }
-    } else if (line === "L") {
-      EyeState.notifyClick(String(Color.accent))
-    } else if (line === "R") {
-      EyeState.notifyClick(String(Color.urgent))
-    } else if (line === "M") {
-      EyeState.notifyClick(String(Color.foreground))
+    } else if (EyeState.tracking) {
+      // Click rings only when tracking is on.
+      if (line === "L") {
+        EyeState.notifyClick(String(Color.accent))
+      } else if (line === "R") {
+        EyeState.notifyClick(String(Color.urgent))
+      } else if (line === "M") {
+        EyeState.notifyClick(String(Color.foreground))
+      }
     }
   }
 

@@ -24,7 +24,9 @@ Item {
   property real pupilY: 0
 
   readonly property color fg: root.bar ? root.bar.barForeground : Color.foreground
-  readonly property int slotSize: (Style.bar.iconSlot > 0) ? Style.bar.iconSlot : 26
+  // Match the bar's icon canvas size (16) so the eye doesn't tower over the
+  // other widgets, plus a hair for the ring to breathe.
+  readonly property int slotSize: (Style.bar.iconCanvas > 0 ? Style.bar.iconCanvas : 16) + Style.space(1)
   readonly property real pupilTravel: slotSize * 0.20
 
   implicitWidth: slotSize
@@ -111,11 +113,9 @@ Item {
     hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
     onClicked: {
+      // Off only dims the eye and stops the click rings; the pupil keeps
+      // following the cursor.
       EyeState.tracking = !EyeState.tracking
-      if (!EyeState.tracking) {
-        root.pupilX = 0
-        root.pupilY = 0
-      }
     }
   }
 }
