@@ -20,19 +20,18 @@ function notifyClick(color) {
 }
 
 // --- key display state -------------------------------------------------------
-// The helper emits "K <name> <mods>" and "M <mod> <0|1>"; the overlay updates
-// these and the key panel polls them. heldMods is a comma list of held
-// modifiers; each key press bumps keySeq with the key's name + mods.
+// The helper emits "K <name> <mods>" and "M <mod> <0|1>"; the overlay pushes
+// each key into a QUEUE so no key is lost even when several arrive between the
+// panel's polls (fast typing). keySeq = number of keys received; the panel
+// drains keyQueue[lastSeen..keySeq-1].
+var keyQueue = []
 var keySeq = 0
-var keyName = ""
-var keyMods = ""
 var heldMods = ""
 
 function notifyKey(name, mods) {
-  keyName = name
-  keyMods = mods
-  heldMods = mods
+  keyQueue.push({ name: name, mods: mods })
   keySeq += 1
+  heldMods = mods
 }
 
 function notifyMod(mod, down) {

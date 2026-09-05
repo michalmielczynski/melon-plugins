@@ -19,6 +19,10 @@ Rectangle {
   property bool compact: false
 
   readonly property bool isMod: mod === "ctrl" || mod === "shift" || mod === "alt" || mod === "super"
+  readonly property string modIcon: mod === "ctrl" ? "⌃"
+    : mod === "shift" ? "⇧"
+    : mod === "alt" ? "⌥"
+    : mod === "super" ? "⌘" : mod
 
   implicitWidth: label.implicitWidth + (root.compact ? Style.space(5) : Style.space(9))
   implicitHeight: label.implicitHeight + (root.compact ? Style.space(3) : Style.space(6))
@@ -34,8 +38,7 @@ Rectangle {
   Text {
     id: label
     anchors.centerIn: parent
-    text: root.isMod ? qsTr(root.mod.charAt(0).toUpperCase() + root.mod.slice(1))
-                     : root.mod
+    text: root.isMod ? root.modIcon : root.mod
     color: root.isMod
       ? (root.held ? Color.accent : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.85))
       : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 1.0)

@@ -42,14 +42,19 @@ KEY_MAP = ec.ecodes.get("KEY_A")
 
 # display names for named keys (letters/digits/F-keys handled generically)
 NAMED_KEYS = {
-    ec.KEY_ENTER: "Enter", ec.KEY_BACKSPACE: "Backspace", ec.KEY_SPACE: "Space",
-    ec.KEY_TAB: "Tab", ec.KEY_ESC: "Esc", ec.KEY_DELETE: "Del",
+    ec.KEY_ENTER: "⏎", ec.KEY_BACKSPACE: "⌫", ec.KEY_SPACE: "␣",
+    ec.KEY_TAB: "⇥", ec.KEY_ESC: "⎋", ec.KEY_DELETE: "⌦",
     ec.KEY_UP: "↑", ec.KEY_DOWN: "↓", ec.KEY_LEFT: "←", ec.KEY_RIGHT: "→",
-    ec.KEY_HOME: "Home", ec.KEY_END: "End", ec.KEY_PAGEUP: "PgUp",
-    ec.KEY_PAGEDOWN: "PgDn", ec.KEY_INSERT: "Ins", ec.KEY_CAPSLOCK: "Caps",
-    ec.KEY_PRINT: "PrtSc", ec.KEY_PAUSE: "Pause", ec.KEY_MENU: "Menu",
-    ec.KEY_KPENTER: "Enter", ec.KEY_KPPLUS: "+", ec.KEY_KPMINUS: "-",
-    ec.KEY_KPASTERISK: "*", ec.KEY_KPSLASH: "/",
+    ec.KEY_HOME: "⌂", ec.KEY_END: "⤓", ec.KEY_PAGEUP: "⇞",
+    ec.KEY_PAGEDOWN: "⇟", ec.KEY_INSERT: "⌤", ec.KEY_CAPSLOCK: "⇪",
+    ec.KEY_PRINT: "⎙", ec.KEY_PAUSE: "⏸", ec.KEY_MENU: "☰",
+    ec.KEY_KPENTER: "⏎", ec.KEY_KPPLUS: "+", ec.KEY_KPMINUS: "−",
+    ec.KEY_KPASTERISK: "×", ec.KEY_KPSLASH: "÷",
+    ec.KEY_SEMICOLON: ";", ec.KEY_COMMA: ",", ec.KEY_DOT: ".",
+    ec.KEY_SLASH: "/", ec.KEY_GRAVE: "`", ec.KEY_MINUS: "−",
+    ec.KEY_EQUAL: "=", ec.KEY_LEFTBRACE: "{", ec.KEY_RIGHTBRACE: "}",
+    ec.KEY_LEFTBRACKET: "[", ec.KEY_RIGHTBRACKET: "]",
+    ec.KEY_BACKSLASH: "\\", ec.KEY_APOSTROPHE: "'",
 }
 
 MOD_KEYS = {
