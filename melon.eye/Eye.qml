@@ -28,9 +28,13 @@ Item {
   // other widgets, plus a hair for the ring to breathe.
   readonly property int slotSize: (Style.bar.iconCanvas > 0 ? Style.bar.iconCanvas : 16) + Style.space(1)
   readonly property real pupilTravel: slotSize * 0.20
+  readonly property bool vertical: bar ? bar.vertical : false
 
-  implicitWidth: slotSize
-  implicitHeight: slotSize
+  // The widget spans the full bar height (like every other widget) and the
+  // eye visual is centred inside it — otherwise the island Row top-aligns the
+  // small eye and it rides above the rest of the bar.
+  implicitWidth: vertical ? bar.barSize : slotSize
+  implicitHeight: vertical ? slotSize : bar.barSize
 
   Component.onDestruction: EyeState.tracking = false
 
@@ -42,7 +46,7 @@ Item {
     running: true
     onTriggered: {
       if (root.tracking !== EyeState.tracking) root.tracking = EyeState.tracking
-      var gp = mapToGlobal(slotSize / 2, slotSize / 2)
+      var gp = mapToGlobal(width / 2, height / 2)
       var dx = EyeState.cursorX - gp.x
       var dy = EyeState.cursorY - gp.y
       var a = Math.atan2(dy, dx)
