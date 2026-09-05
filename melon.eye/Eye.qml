@@ -35,8 +35,10 @@ Item {
   // The widget spans the full bar height (like every other widget) and the
   // eye visual is centred inside it — otherwise the island Row top-aligns the
   // small eye and it rides above the rest of the bar. Width grows to fit key
-  // pops to the right of the eye when keys are pressed.
-  implicitWidth: vertical ? barBase : (barBase + keys.implicitWidth)
+  // pops to the right of the eye when keys are pressed, but is capped so it
+  // never runs over the centre island.
+  readonly property int maxPills: (Style.bar.iconSlot > 0 ? Style.bar.iconSlot : 26) * 10
+  implicitWidth: vertical ? barBase : (barBase + Math.min(keys.implicitWidth, root.maxPills))
   implicitHeight: vertical ? slotSize : barBase
 
   Component.onDestruction: EyeState.tracking = false
@@ -80,7 +82,7 @@ Item {
   Item {
     id: layout
     anchors.centerIn: parent
-    width: root.barBase + keys.implicitWidth
+    width: root.barBase + Math.min(keys.implicitWidth, root.maxPills)
     height: root.barBase
 
     Item {

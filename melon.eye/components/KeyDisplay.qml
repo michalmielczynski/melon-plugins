@@ -31,15 +31,19 @@ Item {
 
   function poll() {
     if (root.heldMods !== EyeState.heldMods) root.heldMods = EyeState.heldMods
+    // Sweep faded items on EVERY poll (not just on a new key), so the pills
+    // disappear and the bar collapses back even after typing stops.
+    var i = 0
+    while (i < hist.count) {
+      var ag = root.clock - hist.get(i).born
+      var th = (root.holdMs + root.fadeMs) / 50
+      if (ag > th) hist.remove(i)
+      else i++
+    }
     if (lastSeq === EyeState.keySeq) return
     lastSeq = EyeState.keySeq
     hist.append({ kseq: EyeState.keySeq, name: EyeState.keyName, mods: EyeState.keyMods, born: root.clock })
     while (hist.count > 7) hist.remove(0)
-    var i = 0
-    while (i < hist.count) {
-      if (root.clock - hist.get(i).born > (root.holdMs + root.fadeMs) / 50) hist.remove(i)
-      else i++
-    }
   }
 
   Row {
