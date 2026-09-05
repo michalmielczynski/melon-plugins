@@ -1,0 +1,28 @@
+{
+  "iconSize": 40,
+  "margin": 8,
+  "position": "bottom",
+  "fullLength": false,
+  "reserveSpace": false,
+  "autoHide": true,
+  "revealThickness": 12,
+  "clickAction": "focus-or-launch",
+  "showLauncher": true,
+  "pinned": [
+    "org.gnome.Nautilus",
+    "com.google.Chrome",
+    "com.mitchellh.ghostty",
+    "code",
+    "obsidian",
+    "chatgpt"
+  ],
+  "labels": {
+    "org.gnome.Nautilus": "Files",
+    "com.google.Chrome": "Chrome",
+    "com.mitchellh.ghostty": "Terminal",
+    "code": "VS Code",
+    "obsidian": "Obsidian",
+    "chatgpt": "ChatGPT"
+  },
+  "backgroundOpacity": 0.72
+}

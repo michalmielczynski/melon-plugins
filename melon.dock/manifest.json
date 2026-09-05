@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "melon.dock",
+  "name": "melon.dock",
+  "version": "1.0.0",
+  "author": "melon",
+  "license": "MIT",
+  "description": "Omarchy-native application dock with auto-hide and screen-edge reveal.",
+  "kinds": [
+    "overlay"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Overlay.qml"
+  }
+}

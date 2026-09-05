@@ -1,0 +1,14 @@
+# Track ONLY melon.bar and melon.dock; ignore every other plugin, nested repos,
+# and local backup/temp files. This keeps the repo focused on OUR custom work.
+
+/*
+!/.gitignore
+!/melon.bar/
+!/melon.dock/
+
+# local backups / temp
+*.bak
+*.bak.*
+*.orig
+*~
+*.swp
