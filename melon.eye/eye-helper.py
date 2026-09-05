@@ -52,8 +52,7 @@ NAMED_KEYS = {
     ec.KEY_KPASTERISK: "×", ec.KEY_KPSLASH: "÷",
     ec.KEY_SEMICOLON: ";", ec.KEY_COMMA: ",", ec.KEY_DOT: ".",
     ec.KEY_SLASH: "/", ec.KEY_GRAVE: "`", ec.KEY_MINUS: "−",
-    ec.KEY_EQUAL: "=", ec.KEY_LEFTBRACE: "{", ec.KEY_RIGHTBRACE: "}",
-    ec.KEY_LEFTBRACKET: "[", ec.KEY_RIGHTBRACKET: "]",
+    ec.KEY_EQUAL: "=", ec.KEY_LEFTBRACE: "[", ec.KEY_RIGHTBRACE: "]",
     ec.KEY_BACKSLASH: "\\", ec.KEY_APOSTROPHE: "'",
 }
 
