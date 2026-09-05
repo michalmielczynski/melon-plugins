@@ -2,14 +2,16 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "EyeState.js" as EyeState
 
-// Minimalist eye for the bar, in the Omarchy theme style:
-// - the pupil follows the mouse cursor (eye-helper.py polls Hyprland IPC),
-// - a ring blooms in a theme colour on mouse clicks (left/right/middle),
-// - clicking the eye toggles tracking on/off.
+// Minimalist eye bar widget, in the Omarchy theme style:
+// - the pupil follows the mouse cursor (position from EyeState, fed by the
+//   overlay helper eye-helper.py),
+// - blinks randomly (not too often),
+// - clicking the eye toggles tracking on/off; when on, the overlay draws the
+//   click rings at the cursor (see Overlay.qml / RingLayer.qml).
 
 Item {
   id: root
@@ -17,111 +19,89 @@ Item {
   property var bar: null
   property var shell: null
 
-  property bool tracking: false
-
+  property bool tracking: false   // QML-side copy of EyeState.tracking
   property real pupilX: 0
   property real pupilY: 0
-  property color flashColor: Color.accent
 
   readonly property color fg: root.bar ? root.bar.barForeground : Color.foreground
   readonly property int slotSize: (Style.bar.iconSlot > 0) ? Style.bar.iconSlot : 26
   readonly property real pupilTravel: slotSize * 0.20
-  readonly property string helperPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/melon.eye/eye-helper.py"
 
   implicitWidth: slotSize
   implicitHeight: slotSize
 
-  // Kill the helper when the widget goes away (shell restart, layout change),
-  // so it never lingers as an orphaned process.
-  Component.onDestruction: helper.running = false
+  Component.onDestruction: EyeState.tracking = false
 
-  // ---- helper: cursor position + mouse clicks via stdout lines ----
-  Process {
-    id: helper
-    command: ["python3", root.helperPath]
-    running: root.tracking
-    stdout: SplitParser { splitMarker: "\n" }
-  }
-  Connections {
-    target: helper.stdout
-    function onRead(line) { root.onHelperLine(String(line).trim()) }
-  }
-
-  function onHelperLine(line) {
-    if (line.charAt(0) === "P") {
-      var parts = line.split(" ")
-      if (parts.length === 3) {
-        var px = Number(parts[1])
-        var py = Number(parts[2])
-        if (isFinite(px) && isFinite(py)) {
-          var gp = mapToGlobal(slotSize / 2, slotSize / 2)
-          var dx = px - gp.x
-          var dy = py - gp.y
-          var a = Math.atan2(dy, dx)
-          pupilX = Math.cos(a) * pupilTravel
-          pupilY = Math.sin(a) * pupilTravel
-        }
-      }
-    } else if (line === "L") {
-      flash(Color.accent)
-    } else if (line === "R") {
-      flash(Color.urgent)
-    } else if (line === "M") {
-      flash(root.fg)
+  // ---- sync shared state + pupil direction ----
+  Timer {
+    id: sync
+    interval: 33
+    repeat: true
+    running: true
+    onTriggered: {
+      if (root.tracking !== EyeState.tracking) root.tracking = EyeState.tracking
+      var gp = mapToGlobal(slotSize / 2, slotSize / 2)
+      var dx = EyeState.cursorX - gp.x
+      var dy = EyeState.cursorY - gp.y
+      var a = Math.atan2(dy, dx)
+      pupilX = Math.cos(a) * pupilTravel
+      pupilY = Math.sin(a) * pupilTravel
     }
   }
 
-  function flash(color) {
-    flashColor = color
-    flashAnim.restart()
+  // ---- random blink, not too often ----
+  Timer {
+    id: blinkTimer
+    interval: 2500
+    repeat: false
+    running: true
+    onTriggered: {
+      blink.start()
+      interval = 3000 + Math.random() * 6000
+      restart()
+    }
+  }
+  SequentialAnimation {
+    id: blink
+    NumberAnimation { target: blinkScale; property: "yScale"; to: 0.12; duration: 70; easing.type: Easing.InOutQuad }
+    NumberAnimation { target: blinkScale; property: "yScale"; to: 1; duration: 90; easing.type: Easing.InOutQuad }
   }
 
-  // ---- visuals ----
-  Rectangle {
-    id: sclera
-    anchors.centerIn: parent
-    width: root.slotSize - Style.space(2)
-    height: root.slotSize - Style.space(2)
-    radius: width / 2
-    color: "transparent"
-    border.width: Math.max(1, Style.spaceReal(1))
-    border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, root.tracking ? 0.55 : 0.25)
-  }
-
-  Rectangle {
-    id: pupil
-    width: root.slotSize * 0.30
-    height: root.slotSize * 0.30
-    radius: width / 2
-    color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, root.tracking ? 0.95 : 0.35)
-    x: root.slotSize / 2 - width / 2 + root.pupilX
-    y: root.slotSize / 2 - height / 2 + root.pupilY
-
-    Behavior on x { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
-    Behavior on y { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
-  }
-
-  Rectangle {
-    id: flashRing
+  // ---- visuals (grouped so the blink can squash them vertically) ----
+  Item {
+    id: eyeVisual
     anchors.centerIn: parent
     width: root.slotSize
     height: root.slotSize
-    radius: width / 2
-    color: "transparent"
-    border.width: Math.max(1.5, Style.spaceReal(1))
-    border.color: root.flashColor
-    opacity: 0
-    scale: 0.55
-    transformOrigin: Item.Center
-  }
+    transform: Scale {
+      id: blinkScale
+      origin.x: root.slotSize / 2
+      origin.y: root.slotSize / 2
+      yScale: 1
+    }
 
-  SequentialAnimation {
-    id: flashAnim
-    PropertyAction { target: flashRing; property: "scale"; value: 0.55 }
-    PropertyAction { target: flashRing; property: "opacity"; value: 0.9 }
-    ParallelAnimation {
-      NumberAnimation { target: flashRing; property: "scale"; to: 1.7; duration: 520; easing.type: Easing.OutCubic }
-      NumberAnimation { target: flashRing; property: "opacity"; to: 0; duration: 520; easing.type: Easing.OutCubic }
+    Rectangle {
+      id: sclera
+      anchors.centerIn: parent
+      width: root.slotSize - Style.space(2)
+      height: root.slotSize - Style.space(2)
+      radius: width / 2
+      color: "transparent"
+      border.width: Math.max(1, Style.spaceReal(1))
+      border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, root.tracking ? 0.55 : 0.25)
+    }
+
+    Rectangle {
+      id: pupil
+      width: root.slotSize * 0.30
+      height: root.slotSize * 0.30
+      radius: width / 2
+      color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, root.tracking ? 0.95 : 0.35)
+      x: root.slotSize / 2 - width / 2 + root.pupilX
+      y: root.slotSize / 2 - height / 2 + root.pupilY
+
+      Behavior on x { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
+      Behavior on y { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
     }
   }
 
@@ -131,8 +111,8 @@ Item {
     hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
     onClicked: {
-      root.tracking = !root.tracking
-      if (!root.tracking) {
+      EyeState.tracking = !EyeState.tracking
+      if (!EyeState.tracking) {
         root.pupilX = 0
         root.pupilY = 0
       }
