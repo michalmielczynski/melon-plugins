@@ -1234,9 +1234,10 @@ Item {
         BarIsland {
           anchors.left: parent.left
           // Align the island's outer left edge with the windows below: a
-          // tiled master window's left edge sits at gaps_out (10) plus the
-          // inner gap/border (scroll layout), measured at ~16 px logical.
-          anchors.leftMargin: Style.gapsOut * 2 + 6
+          // full-width primary window sits symmetrically at gap ~17 on both
+          // sides (kitty at [17, ...]). gapsOut*2+7 lands the island edge on
+          // the window's left edge.
+          anchors.leftMargin: Style.gapsOut * 2 + 7
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           entries: root.layoutEntries("left")
@@ -1253,11 +1254,10 @@ Item {
 
         BarIsland {
           anchors.right: parent.right
-          // Mirror the left island so the bar's outer edges are symmetric.
-          // A full-width primary window sits at gap ~17 (kitty) on both
-          // sides; the left island (gapOuts*2+6=16) aligns within 1px, so the
-          // right one does too at gap 16.
-          anchors.rightMargin: Style.gapsOut * 2 + 6
+          // Mirror the left island: full-width primary window right edge at
+          // gap 17 (kitty at [...,1783]); gapsOut*2+7 lands the island frame
+          // exactly on the window's right edge (1783).
+          anchors.rightMargin: Style.gapsOut * 2 + 7
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           entries: root.layoutEntries("right")
