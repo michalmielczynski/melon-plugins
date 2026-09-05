@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "melon.eye",
+  "name": "melon.eye",
+  "version": "1.0.0",
+  "author": "melon",
+  "license": "MIT",
+  "description": "Minimalist eye in the bar that follows the mouse cursor and blooms with a theme-coloured ring on left/right/middle clicks. Click the eye to toggle tracking.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Eye.qml"
+  },
+  "barWidget": {
+    "displayName": "melon.eye",
+    "description": "Eye that tracks the cursor and flashes on clicks. Click to toggle.",
+    "category": "Fun",
+    "allowMultiple": false,
+    "defaultSection": "left"
+  }
+}

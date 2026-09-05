@@ -5,6 +5,7 @@
 !/.gitignore
 !/melon.bar/
 !/melon.dock/
+!/melon.eye/
 
 # local backups / temp
 *.bak
