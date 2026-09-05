@@ -64,28 +64,29 @@ MOD_KEYS = {
 }
 
 
+LETTER_KEYS = {
+    ec.KEY_Q: "Q", ec.KEY_W: "W", ec.KEY_E: "E", ec.KEY_R: "R", ec.KEY_T: "T",
+    ec.KEY_Y: "Y", ec.KEY_U: "U", ec.KEY_I: "I", ec.KEY_O: "O", ec.KEY_P: "P",
+    ec.KEY_A: "A", ec.KEY_S: "S", ec.KEY_D: "D", ec.KEY_F: "F", ec.KEY_G: "G",
+    ec.KEY_H: "H", ec.KEY_J: "J", ec.KEY_K: "K", ec.KEY_L: "L",
+    ec.KEY_Z: "Z", ec.KEY_X: "X", ec.KEY_C: "C", ec.KEY_V: "V", ec.KEY_B: "B",
+    ec.KEY_N: "N", ec.KEY_M: "M",
+}
+
+
 def key_display(code):
     """evdev keycode -> short display name, or None for unnamed."""
     if code in NAMED_KEYS:
         return NAMED_KEYS[code]
-    if 30 <= code <= 57:  # KEY_A (30) .. KEY_0 (11) region? letters A-Z = 30..44
-        try:
-            n = ec.KEY[code]
-        except Exception:
-            return None
-        if n.startswith("KEY_"):
-            sym = n[4:]
-            if len(sym) == 1 and sym.isalpha():
-                return sym.upper()
+    if code in LETTER_KEYS:
+        return LETTER_KEYS[code]
     if 2 <= code <= 11:  # KEY_1..KEY_9, KEY_0
         try:
             n = ec.KEY[code]
         except Exception:
             return None
-        if n.startswith("KEY_"):
-            digits = n[4:]
-            if digits.isdigit():
-                return digits
+        if n.startswith("KEY_") and n[4:].isdigit():
+            return n[4:]
     if 59 <= code <= 70 or 112 <= code <= 115:  # KEY_F1..F12
         try:
             n = ec.KEY[code]
