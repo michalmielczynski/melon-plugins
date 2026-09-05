@@ -282,7 +282,8 @@ def click_loop():
                                 t0, sx, sy, cx, cy, fingers = st
                                 dur = now - t0
                                 dist = (math.hypot((cx - sx) / rx, (cy - sy) / ry)
-                                        if sx is not None and cx is not None else 0.0)
+                                        if sx is not None and cx is not None
+                                        and sy is not None and cy is not None else 0.0)
                                 if DEBUG:
                                     print("tapcand dur=%.0fms dist=%.2fmm f=%d dwt=%s" %
                                           (dur * 1000, dist, fingers, dwt_enabled),
