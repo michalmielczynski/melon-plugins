@@ -57,8 +57,8 @@ PanelWindow {
     Row {
       id: rowLayout
       anchors.horizontalCenter: parent.horizontalCenter
-      anchors.bottom: parent.bottom
-      anchors.bottomMargin: Style.space(10)
+      anchors.top: parent.top
+      anchors.topMargin: Style.space(10)
       spacing: Style.space(4)
 
       // current held modifiers (lit)
