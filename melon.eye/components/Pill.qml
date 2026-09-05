@@ -20,14 +20,12 @@ Rectangle {
   implicitHeight: label.implicitHeight + Style.space(6)
   radius: Style.cornerRadius
 
-  // Solid enough to read on light and dark themes.
-  color: root.isKey
-    ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.16)
-    : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.09)
-  border.width: 1
+  // Opaque, theme-aware background so pills are fully readable on any theme.
+  color: Color.popups.background
+  border.width: 1.5
   border.color: root.isMod
-    ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, root.held ? 0.95 : 0.55)
-    : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.4)
+    ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, root.held ? 1.0 : 0.6)
+    : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.45)
 
   Text {
     id: label
