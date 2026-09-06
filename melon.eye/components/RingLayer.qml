@@ -27,13 +27,18 @@ PanelWindow {
   mask: Region { width: 1; height: 1 }
 
   property int lastSeq: EyeState.ringSeq
+  // Cursor-follow ring refresh rate — match the monitor Hz (60/120/144). The
+  // helper polls the pointer at the same rate (MELON_EYE_CURSOR_HZ), and this
+  // timer never becomes the bottleneck.
+  readonly property int cursorHz: Math.max(1, parseInt(Quickshell.env("MELON_EYE_CURSOR_HZ") || "60"))
 
   // TEMP TEST removed
 
-  // Poll the shared mailbox and spawn a ring when a click happened.
+  // Poll the shared mailbox and spawn a ring when a click happened. Runs fast
+  // (cursor Hz) so the cursor ring tracks the mouse with no perceptible lag.
   Timer {
     id: seqWatcher
-    interval: 33
+    interval: Math.round(1000 / root.cursorHz)
     repeat: true
     running: true
     onTriggered: root.pollRings()
@@ -50,6 +55,7 @@ PanelWindow {
     cursorMarker.targetY = gp.y
     cursorMarker.onScreen = (gp.x >= 0 && gp.y >= 0 && gp.x <= content.width && gp.y <= content.height)
     cursorMarker.trackingNow = EyeState.tracking
+    cursorMarker.held = EyeState.buttonHeld
 
     if (lastSeq === EyeState.ringSeq) return
     lastSeq = EyeState.ringSeq
@@ -57,6 +63,7 @@ PanelWindow {
       cx: gp.x,
       cy: gp.y,
       rc: String(EyeState.ringColor),
+      rk: String(EyeState.ringKind),
       expire: Date.now() + 750
     })
     sweeper.restart()
@@ -86,6 +93,7 @@ PanelWindow {
         required property real cx
         required property real cy
         required property color rc
+        required property string rk
 
         x: cx - 24
         y: cy - 24
@@ -122,20 +130,24 @@ PanelWindow {
       property real targetY: 0
       property bool onScreen: false
       property bool trackingNow: false
+      property bool held: false
 
       x: targetX - width / 2
       y: targetY - height / 2
-      width: 30
-      height: 30
+      width: held ? 34 : 30
+      height: width
       opacity: (trackingNow && onScreen) ? 1 : 0
       Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+
+      Behavior on width { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
 
       Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: "transparent"
-        border.width: 2
-        border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.9)
+        color: parent.held ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.28) : "transparent"
+        border.width: parent.held ? 3 : 2
+        border.color: parent.held ? Qt.darker(Color.accent, 1.4) : Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.9)
+        Behavior on border.width { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
       }
     }
   }

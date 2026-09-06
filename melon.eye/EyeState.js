@@ -13,10 +13,24 @@ var cursorY = 0
 // stores the ring colour; each ring layer polls and spawns on change.
 var ringSeq = 0
 var ringColor = "#00000000"
+var ringKind = "L"  // L / R / M / D / T / G — how many rings to draw
 
-function notifyClick(color) {
+function notifyClick(color, kind) {
   ringColor = color
+  ringKind = kind || "L"
   ringSeq += 1
+}
+
+// --- physical button hold state ---------------------------------------------
+// The helper emits "H <btn> <0|1>"; the cursor ring darkens/thickens while any
+// button is held so screencast viewers see "the mouse is pressed".
+var heldButtons = {}
+var buttonHeld = false
+
+function notifyButton(btn, down) {
+  if (down) heldButtons[btn] = true
+  else delete heldButtons[btn]
+  buttonHeld = Object.keys(heldButtons).length > 0
 }
 
 // --- key display state -------------------------------------------------------

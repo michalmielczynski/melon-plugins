@@ -22,6 +22,8 @@ Item {
   property var manifest: null
 
   readonly property string helperPath: Quickshell.env("HOME") + "/.config/omarchy/plugins/melon.eye/eye-helper.py"
+  // Green ring shown when a mouse/touchpad button is RELEASED.
+  readonly property color releaseGreen: "#3fae5f"
 
   // ---- helper: cursor position + mouse clicks via stdout lines ----
   // Runs always: the eye's pupil follows the cursor even when tracking is
@@ -57,13 +59,11 @@ Item {
         EyeState.cursorY = cy
         if (EyeState.tracking) {
           var code = parts[3]
-          if (code === "L") {
-            EyeState.notifyClick(String(Color.accent))
-          } else if (code === "R") {
-            EyeState.notifyClick(String(Color.urgent))
-          } else if (code === "M") {
-            EyeState.notifyClick(String(Color.foreground))
-          }
+          var color = code === "G" ? String(root.releaseGreen)
+                    : code === "R" ? String(Color.urgent)
+                    : code === "M" ? String(Color.foreground)
+                    : String(Color.accent)   // L, D, T all use the accent
+          EyeState.notifyClick(color, code)
         }
       }
     } else if (parts[0] === "K" && parts.length >= 2 && EyeState.tracking) {
@@ -71,6 +71,8 @@ Item {
       EyeState.notifyKey(parts[1], mods)
     } else if (parts[0] === "M" && parts.length === 3 && EyeState.tracking) {
       EyeState.notifyMod(parts[1], parts[2] === "1")
+    } else if (parts[0] === "H" && parts.length === 3) {
+      EyeState.notifyButton(parts[1], parts[2] === "1")
     }
   }
 
