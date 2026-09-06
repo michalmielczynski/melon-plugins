@@ -94,10 +94,23 @@ Item {
   // bar background token so the frame tracks themes; alpha tints it for the
   // transparent-bar case so it never reads as a solid slab.
   property color frameBackground: root.background
-  property real frameBackgroundAlpha: root.transparent ? 0.72 : 1.0
+  // Single source of truth for the translucency shared by the transparent bar
+  // frame and Hyprland's inactive windows: ~/.config/hypr/looknfeel.lua
+  // (decoration.inactive_opacity). It is parsed from the FILE (see
+  // refreshInactiveAlpha), NOT read back from hyprctl — syncInactiveOpacity()
+  // overwrites decoration:inactive_opacity on every toggle, so reading the live
+  // value would feed the sync's own output into the "transparent" target and
+  // collapse it to 1.0 (no visible change).
+  property real inactiveAlpha: 0.82
+  property real frameBackgroundAlpha: root.transparent ? root.inactiveAlpha : 1.0
   // Border width in px, matching Hyprland's window border (general:border_size).
   property real frameBorderWidth: 2
   property real frameBorderAlpha: root.transparent ? 0.28 : 0.9
+  // Inactive window border color, read live from Hyprland's
+  // `general:col.inactive_border` so the island frame matches unfocused
+  // windows (the color changes per theme). Falls back to the Omarchy default
+  // gray until the first hyprctl read lands.
+  property color windowBorderColor: "#aa595959"
   // Split the bar into separate content-fitted "islands" (left / centre /
   // right), each with its own frame hugging the screen edge, with the gaps
   // between them showing the wallpaper. Off = one full-width frame.
@@ -679,7 +692,12 @@ Item {
     return source ? Util.fileUrl(source) : ""
   }
 
-  Component.onCompleted: applyBarConfig()
+  Component.onCompleted: {
+    applyBarConfig()
+    refreshWindowBorderColor()
+    refreshInactiveAlpha()
+    syncInactiveOpacity()
+  }
 
   // Revealing the indicators widens their section, which can slide a neighbour
   // under a stationary pointer. Collapsing on that un-hover would move it back
@@ -974,8 +992,130 @@ Item {
     path: root.stateHome + "/omarchy/current"
     watchChanges: true
     printErrors: false
-    onFileChanged: root.scheduleTransparentForegroundRefresh()
+    onFileChanged: {
+      root.scheduleTransparentForegroundRefresh()
+      root.refreshWindowBorderColor()
+    }
   }
+
+  // Read Hyprland's inactive window border color so islands match unfocused
+  // windows (color changes per theme; re-read when the current theme changes).
+  Process {
+    id: windowBorderColorProc
+    stdout: SplitParser {
+      onRead: function(line) {
+        var value = String(line || "").trim()
+        if (!value) return
+        // hyprctl returns {"gradient":"AARRGGBB 0deg",...} — take the ARGB.
+        var m = value.match(/"gradient"\s*:\s*"([0-9A-Fa-f]{8})/)
+        if (!m) return
+        var hex = m[1]
+        var a = parseInt(hex.substring(0, 2), 16) / 255.0
+        var r = parseInt(hex.substring(2, 4), 16) / 255.0
+        var g = parseInt(hex.substring(4, 6), 16) / 255.0
+        var b = parseInt(hex.substring(6, 8), 16) / 255.0
+        root.windowBorderColor = Qt.rgba(r, g, b, a)
+      }
+    }
+  }
+
+  function refreshWindowBorderColor() {
+    if (windowBorderColorProc.running) return
+    windowBorderColorProc.command = ["hyprctl", "-j", "getoption", "general:col.inactive_border"]
+    windowBorderColorProc.running = true
+  }
+
+  // Keep Hyprland's inactive-window opacity in lockstep with the bar's own
+  // transparency: double-clicking the bar toggles `transparent`, which flips
+  // decoration:inactive_opacity between the bar's translucent alpha (0.72) and
+  // fully opaque (1.0) — "exactly like the bar". Uses hyprctl eval (Hyprland's
+  // Lua config manager, so `keyword` is unavailable). We sync on the actual
+  // `transparent` state (what the bar renders), not `requestedTransparent`,
+  // which is only set early and settles later.
+  // Hyprland does not animate decoration:inactive_opacity itself, so to make
+  // the opaque<->translucent flip read as a smooth fade (matching the bar's
+  // own ColorAnimation) we interpolate the value in small steps via repeated
+  // hyprctl eval calls, eased in/out at both ends. The first sync after boot
+  // just snaps the value (no visible fade at startup); later toggles animate.
+  property real lastInactiveOpacity: 1.0
+  property bool opacitySnapped: false
+  property real pendingInactiveOpacity: -1
+
+  function applyInactiveOpacity(alpha) {
+    opacityProc.command = ["hyprctl", "eval", 'hl.config({decoration = {inactive_opacity = ' + String(alpha) + '}})']
+    opacityProc.running = true
+  }
+
+  function animateInactiveOpacity(from, to) {
+    var steps = 10
+    var alphas = []
+    for (var i = 0; i <= steps; i++) {
+      var t = i / steps
+      // easeInOutQuad: slow start + slow end, smooth mid fade
+      var e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+      var a = from + (to - from) * e
+      alphas.push(a.toFixed(3))
+    }
+    var script = "for a in " + alphas.join(" ") + "; do hyprctl eval \"hl.config({decoration = {inactive_opacity = $a}})\" >/dev/null 2>&1; sleep 0.018; done"
+    opacityProc.command = ["bash", "-c", script]
+    opacityProc.running = true
+  }
+
+  function syncInactiveOpacity() {
+    var alpha = root.transparent ? root.inactiveAlpha : 1.0
+    if (!root.opacitySnapped) {
+      root.lastInactiveOpacity = alpha
+      root.opacitySnapped = true
+      applyInactiveOpacity(alpha)
+      return
+    }
+    if (Math.abs(alpha - root.lastInactiveOpacity) < 0.001) return
+    // Remember the latest target; if an animation is still in flight we can't
+    // start another, but onExited picks the pending target up when it finishes.
+    root.pendingInactiveOpacity = alpha
+    if (opacityProc.running) return
+    root.animateInactiveOpacity(root.lastInactiveOpacity, alpha)
+    root.lastInactiveOpacity = alpha
+    root.pendingInactiveOpacity = -1
+  }
+
+  Process {
+    id: opacityProc
+    // fire-and-forget; the command is set in syncInactiveOpacity()
+    onExited: function(exitCode) {
+      if (root.pendingInactiveOpacity >= 0) {
+        var target = root.pendingInactiveOpacity
+        root.pendingInactiveOpacity = -1
+        root.animateInactiveOpacity(root.lastInactiveOpacity, target)
+        root.lastInactiveOpacity = target
+      }
+    }
+  }
+
+  // Parse the translucent alpha from ~/.config/hypr/looknfeel.lua so the bar
+  // frame and the value pushed on toggle share ONE config value. Never read it
+  // back from Hyprland (see the property comment above).
+  FileView {
+    id: inactiveOpacityFile
+    path: root.home + "/.config/hypr/looknfeel.lua"
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.refreshInactiveAlpha()
+    onFileChanged: root.refreshInactiveAlpha()
+  }
+
+  function refreshInactiveAlpha() {
+    var text = String(inactiveOpacityFile.text() || "")
+    var m = text.match(/inactive_opacity\s*=\s*([0-9.]+)/)
+    if (!m) return
+    var v = Number(m[1])
+    if (!isFinite(v) || v <= 0 || v > 1) return
+    root.inactiveAlpha = v
+    // The source value changed — re-sync Hyprland to the current transparent state.
+    syncInactiveOpacity()
+  }
+
+  onTransparentChanged: syncInactiveOpacity()
 
   function runProcess(process) {
     if (!process.running)
@@ -1233,11 +1373,12 @@ Item {
 
         BarIsland {
           anchors.left: parent.left
-          // Align the island's outer left edge with the windows below: a
-          // full-width primary window sits symmetrically at gap ~17 on both
-          // sides (kitty at [17, ...]). gapsOut*2+7 lands the island edge on
-          // the window's left edge.
-          anchors.leftMargin: Style.gapsOut * 2 + 7
+          // Align the island's outer left edge with the windows below. With
+          // gaps_in=0 a full-width window now sits at gap = gapsOut(10) +
+          // border(2) = 12 on both sides. gapsOut*2 (Style halves Hyprland's
+          // gaps_out) + frameBorderWidth lands the island edge on the window's
+          // left edge.
+          anchors.leftMargin: Style.gapsOut * 2 + root.frameBorderWidth
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           entries: root.layoutEntries("left")
@@ -1254,10 +1395,10 @@ Item {
 
         BarIsland {
           anchors.right: parent.right
-          // Mirror the left island: full-width primary window right edge at
-          // gap 17 (kitty at [...,1783]); gapsOut*2+7 lands the island frame
-          // exactly on the window's right edge (1783).
-          anchors.rightMargin: Style.gapsOut * 2 + 7
+          // Mirror the left island: a full-width window's right edge sits at
+          // gap = gapsOut(10) + border(2) = 12; gapsOut*2 + frameBorderWidth
+          // lands the island frame exactly on the window's right edge.
+          anchors.rightMargin: Style.gapsOut * 2 + root.frameBorderWidth
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           entries: root.layoutEntries("right")
@@ -1568,14 +1709,14 @@ Item {
         PathSvg { path: root.framePath(islandFrame.width, islandFrame.height) }
       }
 
-      // Border stroke: drawn only in the translucent (transparent) bar; in
-      // solid mode the outline is dropped and only the filled shape remains.
+      // Border stroke: match the inactive window (general:col.inactive_border
+      // color, general:border_size width) so islands read as window frames. It
+      // is drawn in both transparent and solid mode, just like a window's own
+      // border, not just in the translucent bar.
       ShapePath {
         fillColor: "transparent"
-        strokeColor: Qt.rgba(
-          root.barForeground.r, root.barForeground.g, root.barForeground.b,
-          root.frameBorderAlpha)
-        strokeWidth: root.transparent ? root.frameBorderWidth : 0
+        strokeColor: root.windowBorderColor
+        strokeWidth: root.frameBorderWidth
         fillRule: ShapePath.WindingFill
         PathSvg { path: root.frameBorderPath(islandFrame.width, islandFrame.height) }
       }
