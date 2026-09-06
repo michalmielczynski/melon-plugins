@@ -40,9 +40,19 @@ PanelWindow {
   }
 
   function pollRings() {
+    // Persistent cursor marker: follow the shared cursor position (fed by the
+    // helper at ~20 Hz). Only the screen that actually contains the cursor
+    // shows it; the others get out-of-bounds coords and hide it. Shown only
+    // while tracking is on — a small ring around the mouse so screencast
+    // viewers can see where the cursor is.
+    var gp = content.mapFromGlobal(EyeState.cursorX, EyeState.cursorY)
+    cursorMarker.targetX = gp.x
+    cursorMarker.targetY = gp.y
+    cursorMarker.onScreen = (gp.x >= 0 && gp.y >= 0 && gp.x <= content.width && gp.y <= content.height)
+    cursorMarker.trackingNow = EyeState.tracking
+
     if (lastSeq === EyeState.ringSeq) return
     lastSeq = EyeState.ringSeq
-    var gp = content.mapFromGlobal(EyeState.cursorX, EyeState.cursorY)
     ringModel.append({
       cx: gp.x,
       cy: gp.y,
@@ -101,6 +111,31 @@ PanelWindow {
 
           Component.onCompleted: bloom.start()
         }
+      }
+    }
+
+    // Persistent, calm halo around the cursor. Follows the cursor in real time
+    // (repositioned by pollRings above) and only appears when tracking is on.
+    Item {
+      id: cursorMarker
+      property real targetX: 0
+      property real targetY: 0
+      property bool onScreen: false
+      property bool trackingNow: false
+
+      x: targetX - width / 2
+      y: targetY - height / 2
+      width: 30
+      height: 30
+      opacity: (trackingNow && onScreen) ? 1 : 0
+      Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+
+      Rectangle {
+        anchors.fill: parent
+        radius: width / 2
+        color: "transparent"
+        border.width: 2
+        border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.9)
       }
     }
   }

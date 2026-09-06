@@ -30,6 +30,14 @@ Item {
   readonly property int slotSize: (Style.bar.iconCanvas > 0 ? Style.bar.iconCanvas : 16) + Style.space(1)
   readonly property real pupilTravel: slotSize * 0.20
   readonly property bool vertical: bar ? bar.vertical : false
+  // Pupil dilates as the cursor approaches the eye: pupilZoom goes 1.0 (cursor
+  // far away) up to maxPupilZoom (cursor at/near the eye), interpolated by how
+  // close the cursor is within pupilDilationRange (logical px).
+  property real pupilZoom: 1.0
+  readonly property real pupilBaseSize: (slotSize - Style.space(6)) * 0.32
+  readonly property real pupilSize: pupilBaseSize * pupilZoom
+  readonly property real maxPupilZoom: 1.8
+  readonly property real pupilDilationRange: 250
   readonly property int barBase: bar ? bar.barSize : slotSize
 
   // The widget spans the full bar height (like every other widget) and the
@@ -57,6 +65,10 @@ Item {
       var a = Math.atan2(dy, dx)
       pupilX = Math.cos(a) * pupilTravel
       pupilY = Math.sin(a) * pupilTravel
+      // Dilate as the cursor closes in: smaller distance -> bigger pupil.
+      var dist = Math.hypot(dx, dy)
+      var t = Math.max(0, 1 - dist / root.pupilDilationRange)
+      root.pupilZoom = 1 + t * (root.maxPupilZoom - 1)
     }
   }
 
@@ -67,13 +79,24 @@ Item {
     repeat: false
     running: true
     onTriggered: {
-      blink.start()
+      // Occasionally do a quick double blink (blink-blink); otherwise a single.
+      if (Math.random() < 0.25) doubleBlink.start()
+      else blink.start()
       interval = 3000 + Math.random() * 6000
       restart()
     }
   }
   SequentialAnimation {
     id: blink
+    NumberAnimation { target: blinkScale; property: "yScale"; to: 0.12; duration: 70; easing.type: Easing.InOutQuad }
+    NumberAnimation { target: blinkScale; property: "yScale"; to: 1; duration: 90; easing.type: Easing.InOutQuad }
+  }
+  // A double blink: two quick close-open cycles with a tiny pause in between.
+  SequentialAnimation {
+    id: doubleBlink
+    NumberAnimation { target: blinkScale; property: "yScale"; to: 0.12; duration: 70; easing.type: Easing.InOutQuad }
+    NumberAnimation { target: blinkScale; property: "yScale"; to: 1; duration: 90; easing.type: Easing.InOutQuad }
+    PauseAnimation { duration: 90 }
     NumberAnimation { target: blinkScale; property: "yScale"; to: 0.12; duration: 70; easing.type: Easing.InOutQuad }
     NumberAnimation { target: blinkScale; property: "yScale"; to: 1; duration: 90; easing.type: Easing.InOutQuad }
   }
@@ -87,6 +110,22 @@ Item {
     width: root.barBase + Math.min(keys.implicitWidth, root.maxPills)
     height: root.barBase
     Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+
+    // Framing ring: a sibling of the eye (outside the blink transform) so it
+    // stays a full circle while the eye blinks ("open" during a blink) and stays
+    // concentric with the eye — no squish/tilt from the blink. Same colour as
+    // the eye (barForeground) so it reads as one medallion.
+    Rectangle {
+      id: eyeRing
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      width: root.slotSize
+      height: root.slotSize
+      radius: width / 2
+      color: "transparent"
+      border.width: Math.max(1, Style.spaceReal(1.5))
+      border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.85)
+    }
 
     Item {
       id: eyeVisual
@@ -104,11 +143,13 @@ Item {
       // ON = negative (theme-aware): sclera filled with the theme foreground,
       // pupil with the theme background — so on a dark theme the eye becomes a
       // light disc, on a light theme a dark disc. OFF = the normal outline eye.
+      // The disc is held back from the ring so there's a clear gap between the
+      // frame and the eye.
       Rectangle {
         id: sclera
         anchors.centerIn: parent
-        width: root.slotSize - Style.space(2)
-        height: root.slotSize - Style.space(2)
+        width: root.slotSize - Style.space(6)
+        height: root.slotSize - Style.space(6)
         radius: width / 2
         color: root.tracking ? root.fg : "transparent"
         border.width: root.tracking ? 0 : Math.max(1, Style.spaceReal(1))
@@ -117,8 +158,8 @@ Item {
 
       Rectangle {
         id: pupil
-        width: root.slotSize * 0.30
-        height: root.slotSize * 0.30
+        width: root.pupilSize
+        height: root.pupilSize
         radius: width / 2
         color: root.tracking ? Color.background : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.95)
         x: root.slotSize / 2 - width / 2 + root.pupilX
@@ -126,6 +167,8 @@ Item {
 
         Behavior on x { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
         Behavior on y { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
+        Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
       }
     }
 
