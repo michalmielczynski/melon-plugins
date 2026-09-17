@@ -115,6 +115,11 @@ Item {
   // right), each with its own frame hugging the screen edge, with the gaps
   // between them showing the wallpaper. Off = one full-width frame.
   property bool islands: false
+  // Two islands that would touch instead merge into ONE card: the right group
+  // keeps its frame pinned to the screen edge and stretches it over the centre
+  // group, which slides left into the free space on its way. Off = every
+  // island keeps its own frame (they overlap once they no longer fit).
+  property bool islandsJoin: true
 
   // SVG path for a rounded frame that ONLY rounds the interior-facing corners
   // (bottom for a top bar, top for a bottom bar, right for a left bar, left for
@@ -1364,45 +1369,88 @@ Item {
       id: horizontalBarIslands
 
       Item {
+        id: islandsRoot
+
         anchors.fill: parent
+
+        // Outer inset that lands an island's frame on the window edge below:
+        // gapsOut*2 (Style halves Hyprland's gaps_out) + frameBorderWidth. With
+        // gaps_in=0 a full-width window sits at gap = gapsOut + border on both
+        // sides, so this inset puts the frame edge on the window's own edge.
+        readonly property real edgeInset: Style.gapsOut * 2 + root.frameBorderWidth
+        // Room the merged card keeps for the left island before it starts
+        // overlapping it; elastic widgets are given up before that happens.
+        readonly property real leftIslandGap: Style.space(8)
+
+        // The centre island sits on the screen centre while there is room. Once
+        // the right island reaches it, the centre island slides left instead of
+        // letting the two overlap: it stays glued to the right island's edge,
+        // so the merged card also gets to use the free space left of centre.
+        readonly property real naturalCenterX: (width - centerIsland.width) / 2
+        readonly property real gluedCenterX: rightIsland.x - centerIsland.width
+        readonly property bool centerJoined: root.islandsJoin && rightIsland.width > 0
+          && gluedCenterX <= naturalCenterX
+        readonly property real centerX: centerJoined ? gluedCenterX : naturalCenterX
+
+        // Elastic widgets (omarchy.spacer) only exist to hold groups apart, so
+        // the merged card is the first thing to give them up when it would
+        // otherwise run into the left island. The measurement uses the slots'
+        // natural widths, not the collapsed ones, so collapsing cannot feed
+        // back into the decision that triggered it.
+        readonly property real joinedNaturalWidth: centerIsland.naturalWidth + rightIsland.naturalWidth
+        readonly property bool elasticCollapsed: centerJoined
+          && width - edgeInset - joinedNaturalWidth < leftIsland.x + leftIsland.width + leftIslandGap
 
         // Full-window gesture layer behind the islands: double-clicking empty
         // bar space toggles transparency, press-and-hold drags the bar. The
-        // islands (z:1) render above it and handle their own widget clicks.
+        // islands render above it and handle their own widget clicks.
         CenterGestureArea { anchors.fill: parent; z: 0 }
 
+        // Declared first: when the pair merges this island owns the shared
+        // frame, so it paints under the centre island's widgets and under the
+        // left island (which the card may reach once space really runs out).
         BarIsland {
-          anchors.left: parent.left
-          // Align the island's outer left edge with the windows below. With
-          // gaps_in=0 a full-width window now sits at gap = gapsOut(10) +
-          // border(2) = 12 on both sides. gapsOut*2 (Style halves Hyprland's
-          // gaps_out) + frameBorderWidth lands the island edge on the window's
-          // left edge.
-          anchors.leftMargin: Style.gapsOut * 2 + root.frameBorderWidth
-          anchors.top: parent.top
-          anchors.bottom: parent.bottom
-          entries: root.layoutEntries("left")
-          region: "left"
-        }
+          id: rightIsland
 
-        BarIsland {
-          anchors.horizontalCenter: parent.horizontalCenter
-          anchors.top: parent.top
-          anchors.bottom: parent.bottom
-          entries: root.layoutEntries("center")
-          region: "center"
-        }
-
-        BarIsland {
           anchors.right: parent.right
           // Mirror the left island: a full-width window's right edge sits at
           // gap = gapsOut(10) + border(2) = 12; gapsOut*2 + frameBorderWidth
           // lands the island frame exactly on the window's right edge.
-          anchors.rightMargin: Style.gapsOut * 2 + root.frameBorderWidth
+          anchors.rightMargin: islandsRoot.edgeInset
           anchors.top: parent.top
           anchors.bottom: parent.bottom
           entries: root.layoutEntries("right")
           region: "right"
+          // One frame for the merged card: stretch it over the centre island so
+          // the pair reads as a single surface (no seam, no doubled border).
+          frameExtendLeft: islandsRoot.centerJoined ? centerIsland.width : 0
+          joinedLeft: islandsRoot.centerJoined
+          collapseElastic: islandsRoot.elasticCollapsed
+        }
+
+        BarIsland {
+          id: centerIsland
+
+          x: islandsRoot.centerX
+          anchors.top: parent.top
+          anchors.bottom: parent.bottom
+          entries: root.layoutEntries("center")
+          region: "center"
+          // The merged neighbour paints the shared frame.
+          frameOwner: !islandsRoot.centerJoined
+          joinedRight: islandsRoot.centerJoined
+          collapseElastic: islandsRoot.elasticCollapsed
+        }
+
+        BarIsland {
+          id: leftIsland
+
+          anchors.left: parent.left
+          anchors.leftMargin: islandsRoot.edgeInset
+          anchors.top: parent.top
+          anchors.bottom: parent.bottom
+          entries: root.layoutEntries("left")
+          region: "left"
         }
       }
     }
@@ -1679,6 +1727,8 @@ Item {
   // A self-contained "island": a content-fitted frame that hugs the screen
   // edge (no border on the edge side), sized to its widgets. `entries` are the
   // bar widgets for this cluster; gaps between islands show the wallpaper.
+  // Two islands that merge (see horizontalBarIslands) share ONE frame: the
+  // outer island owns it and stretches it over its neighbour.
   component BarIsland: Item {
     id: island
     property var entries: []
@@ -1686,16 +1736,49 @@ Item {
     // Generous internal horizontal padding so the island frame breathes around
     // the widgets (and gives room for the double-click/toggle gesture).
     property real padX: Style.space(12)
+    // Pixels this island's frame is painted past its own left edge, over the
+    // neighbour it merged with.
+    property real frameExtendLeft: 0
+    // A merged neighbour paints the shared frame; this island then only paints
+    // its widgets on top of it.
+    property bool frameOwner: true
+    // Pull the widgets toward a merged neighbour: the two islands' inner
+    // paddings would otherwise add up to a gap twice the size of the ordinary
+    // spacing between widgets.
+    property bool joinedLeft: false
+    property bool joinedRight: false
+    // Elastic widgets give up their space when the merged card runs out of it.
+    property bool collapseElastic: false
 
     readonly property real contentWidth: contentRow.implicitWidth
-    width: contentWidth + padX * 2
+    readonly property real seamPull: Style.space(6)
+    // Width this island wants with every elastic widget visible. Measured from
+    // the slots' own natural widths rather than from the collapsed width, so
+    // the merged card can price the room it needs without shrinking itself
+    // into a different answer.
+    readonly property real naturalWidth: visible ? slotSum("naturalWidth") + padX * 2 : 0
+    width: visible ? contentWidth + padX * 2 : 0
     implicitWidth: width
     visible: island.entries.length > 0
 
+    function slotSum(name) {
+      var total = 0
+      var slots = contentRow.children
+      for (var i = 0; i < slots.length; i++) {
+        if (slots[i] && slots[i][name] !== undefined) total += slots[i][name]
+      }
+      return total
+    }
+
     Shape {
       id: islandFrame
-      anchors.fill: parent
-      anchors.margins: root.frameMargin
+      // Explicit geometry rather than anchors.fill: a merged card stretches its
+      // frame past its own left edge, over the island it swallowed.
+      visible: island.frameOwner
+      x: root.frameMargin - island.frameExtendLeft
+      y: root.frameMargin
+      width: Math.max(0, island.width + island.frameExtendLeft - root.frameMargin * 2)
+      height: Math.max(0, island.height - root.frameMargin * 2)
       preferredRendererType: Shape.CurveRenderer
       z: 0
 
@@ -1726,7 +1809,10 @@ Item {
     // Repeater is a direct child of the Row, so the island hugs the widgets.
     Row {
       id: contentRow
-      anchors.horizontalCenter: parent.horizontalCenter
+      // x instead of horizontalCenter: the merged side pulls the widgets toward
+      // the seam by a few pixels, which centring would divide away again.
+      x: island.padX + (island.joinedRight ? island.seamPull : 0)
+        - (island.joinedLeft ? island.seamPull : 0)
       anchors.verticalCenter: parent.verticalCenter
       // Small optical correction: the shared WidgetButton centers the text's
       // line box geometrically, which can read slightly low. Nudging up a hair
@@ -1737,7 +1823,12 @@ Item {
 
       Repeater {
         model: island.entries
-        ModuleSlot { required property var modelData; entry: modelData; region: island.region }
+        ModuleSlot {
+          required property var modelData
+          entry: modelData
+          region: island.region
+          collapseElastic: island.collapseElastic
+        }
       }
     }
   }
@@ -1996,6 +2087,9 @@ Item {
 
     required property var entry
     property string region: ""
+    // Set by the island when a merged card is out of room: elastic widgets
+    // (spacers) collapse instead of pushing the card over the left island.
+    property bool collapseElastic: false
     readonly property string moduleName: root.entryId(entry)
     readonly property var moduleSettings: root.entrySettings(entry)
     readonly property string customType: root.customModuleType(entry)
@@ -2016,6 +2110,13 @@ Item {
       if (qmlCustom) return qmlLoader.item
       return componentLoader.item
     }
+    // Elastic widgets only exist to hold groups apart, so they are the first
+    // thing a crowded merged card gives up.
+    readonly property bool elasticSlot: moduleName === "omarchy.spacer"
+    readonly property bool elasticHidden: collapseElastic && elasticSlot
+    // Width the widget wants on its own, ignoring the elastic collapse: the
+    // island prices the fully expanded card with it.
+    readonly property real naturalWidth: activeItem && activeItem.visible ? (root.vertical ? root.barSize : activeItem.implicitWidth) : 0
     readonly property bool hovered: moduleHover.hovered
     readonly property bool dragSource: root.barDragSource === slot
     readonly property bool panelOpen: root.activePopout === slot.activeItem
@@ -2029,8 +2130,8 @@ Item {
       if (hint !== undefined && hint !== null && hint > 0) return Math.round(hint)
       return Math.max(Style.space(10), Math.round((root.vertical ? slot.height : slot.width) * 0.55))
     }
-    implicitWidth: activeItem && activeItem.visible ? (root.vertical ? root.barSize : activeItem.implicitWidth) : 0
-    implicitHeight: activeItem && activeItem.visible ? activeItem.implicitHeight : 0
+    implicitWidth: elasticHidden ? 0 : naturalWidth
+    implicitHeight: elasticHidden ? 0 : (activeItem && activeItem.visible ? activeItem.implicitHeight : 0)
     width: implicitWidth
     height: implicitHeight
     z: modulePointer.dragging ? 100 : 0
