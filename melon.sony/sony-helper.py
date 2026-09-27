@@ -238,6 +238,7 @@ class Session(dbus.service.Object):
 
     # --- sesja ---
     def take_fd(self, fd):
+        self.helper.cancel_dial_watchdog()
         self.close_fd()
         self.fd = fd
         try:
@@ -663,6 +664,7 @@ class Helper:
         self.device = None
         self.link = "idle"
         self.reason = ""
+        self.released = False
         self.buds = {"left": None, "right": None, "case": None,
                      "left_charging": False, "right_charging": False,
                      "case_charging": False}
@@ -681,6 +683,7 @@ class Helper:
         self.name = "WF-1000XM5"
         self.connected = False
         self.dial_timer = None
+        self.dial_watchdog = None
         self.dial_tries = 0
         self.audio = {"profile": "", "codec": "", "sink": "", "source": "", "ldac": ""}
 
@@ -713,6 +716,8 @@ class Helper:
             "auto-off": lambda: session.set_auto_off(str(value)),
             "power-off": lambda: session.power_off(),
             "raw": lambda: session.send([int(b) for b in value]),
+            "release": lambda: self.release_session(),
+            "claim": lambda: self.claim_session(),
             "audio-profile": lambda: self.set_audio_profile(value),
         }
         action = actions.get(name)
@@ -739,7 +744,24 @@ class Helper:
         GLib.timeout_add(700, lambda: (self.refresh_audio(), self.publish(), False)[2])
         return True
 
+    def release_session(self):
+        """Oddaje sesje kontrolna telefonowi (Sony Sound Connect)."""
+        self.released = True
+        self.session.close("Sesja zwolniona")
+        self.set_link("released", "Sesja oddana telefonowi")
+        return True
+
+    def claim_session(self):
+        self.released = False
+        self.set_link("idle", "Przejmuje sesje kontrolna")
+        self.dial()
+        return True
+
     def dial_error(self, message):
+        if not self.connected:
+            # Rozlaczone sluchawki to nie blad sesji - czekamy na BlueZ.
+            self.set_link("idle", "Słuchawki rozłączone")
+            return
         self.set_link("error", "Sesja kontrolna: %s" % message)
         self.schedule_retry(20 if self.dial_tries < 6 else 120)
 
@@ -783,7 +805,7 @@ class Helper:
     def snapshot(self):
         return {
             "name": self.name, "address": self.mac, "connected": self.connected,
-            "link": self.link, "reason": self.reason,
+            "link": self.link, "reason": self.reason, "released": self.released,
             "buds": self.buds, "bluez_battery": self.bluez_battery,
             "anc": {"mode": self.anc_mode, "level": self.anc_level, "focus": self.anc_focus},
             "eq": {"preset": self.eq_preset, "bands": self.eq_bands},
@@ -870,14 +892,19 @@ class Helper:
             return False
         best = devices[0]
         if best["path"] != self.dev_path:
-            self.session.close("Zmiana słuchawek")
+            if self.session.fd is not None:
+                self.session.close("Zmiana słuchawek")
             self.dev_path = best["path"]
             self.mac = best["address"]
             self.name = best["name"]
+        was_connected = self.connected
         self.connected = best["connected"]
         self.refresh_battery()
-        if self.connected and self.session.fd is None and self.link != "dialing":
+        if (self.connected and self.session.fd is None and not self.released
+                and self.link != "dialing"):
             self.dial()
+        elif not self.connected and self.session.fd is None and self.link not in ("idle", "dialing"):
+            self.set_link("idle", "Słuchawki rozłączone")
         return True
 
     def retarget_tick(self):
@@ -896,6 +923,7 @@ class Helper:
             if "Connected" in changed:
                 self.connected = bool(changed["Connected"])
                 if self.connected:
+                    self.released = False
                     self.dial()
                 else:
                     self.session.close("Sluchawki rozlaczone")
@@ -977,7 +1005,25 @@ class Helper:
             self.dial_timer = None
         self.set_link("dialing", "Otwieram sesje kontrolna")
         self.session.dial(self.mac)
+        # BlueZ potrafi nie odpowiedziec na ConnectProfile (np. gdy polaczenie
+        # zostalo po naszych wlasnych resztkach) - bez tego zegara stan "dialing"
+        # wisialby na zawsze.
+        if self.dial_watchdog:
+            GLib.source_remove(self.dial_watchdog)
+        self.dial_watchdog = GLib.timeout_add_seconds(30, self.dial_timeout)
         return True
+
+    def dial_timeout(self):
+        self.dial_watchdog = None
+        if self.session.fd is not None:
+            return False
+        self.dial_error("timeout otwarcia sesji")
+        return False
+
+    def cancel_dial_watchdog(self):
+        if self.dial_watchdog:
+            GLib.source_remove(self.dial_watchdog)
+            self.dial_watchdog = None
 
 
 def main():

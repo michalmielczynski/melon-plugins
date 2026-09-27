@@ -38,6 +38,7 @@ BarWidget {
   readonly property var features: s.features !== undefined ? s.features : empty
 
   readonly property string link: s.link !== undefined ? s.link : "idle"
+  readonly property bool released: s.released === true
   readonly property bool online: link === "ready"
   readonly property bool connected: s.connected === true
   readonly property string deviceName: s.name !== undefined ? s.name : "Sony"
@@ -181,6 +182,8 @@ BarWidget {
   function setEqFlat() { send({ "cmd": "eq", "preset": "off", "bands": [0, 0, 0, 0, 0, 0] }) }
   function setProfile(kind) { send({ "cmd": "audio-profile", "value": kind }) }
   function powerOff() { send({ "cmd": "power-off" }) }
+  function releaseSession() { send({ "cmd": "release" }) }
+  function claimSession() { send({ "cmd": "claim" }) }
   function refresh() { send({ "cmd": "refresh" }) }
 
   readonly property string cycleOrder: "anc,ambient,off"
@@ -285,6 +288,7 @@ BarWidget {
           title: root.deviceName
           meta: {
             if (!root.connected) return "Rozłączone"
+            if (root.released) return "Sesja u telefonu"
             if (root.link === "ready") return root.ancLabel + (root.ancMode === "ambient" ? " · poziom " + root.ancLevel : "")
             if (root.link === "error") return "Brak sesji kontrolnej"
             return "Łączę z słuchawkami…"
@@ -670,6 +674,22 @@ BarWidget {
 
         PanelSeparator { foreground: root.fg }
 
+        // ---- sesja kontrolna ----
+        // Sluchawki daja jedna sesje MDR: albo my, albo aplikacja Sony w telefonie.
+        Toggle {
+          width: parent.width
+          foreground: root.fg
+          fontFamily: root.fontFamily
+          label: "Trzymaj sesję kontrolną"
+          description: released
+            ? "Sesję ma telefon — włącz, żeby znów sterować z paska"
+            : "Wyłącz, żeby oddać sterowanie aplikacji Sony w telefonie"
+          checked: !released
+          onClicked: released ? root.claimSession() : root.releaseSession()
+        }
+
+        PanelSeparator { foreground: root.fg }
+
         // ---- jakosc lacza ----
         Item {
           width: parent.width
@@ -749,6 +769,8 @@ BarWidget {
     function toggle(): void { root.popupOpen = !root.popupOpen }
     function cycle(): void { root.cycleAnc() }
     function equalizer(): void { root.eqOpen = !root.eqOpen }
+    function release(): void { root.releaseSession() }
+    function claim(): void { root.claimSession() }
     function refresh(): void { root.refresh() }
     function state(): string { return JSON.stringify(root.st === null ? {} : root.st) }
   }

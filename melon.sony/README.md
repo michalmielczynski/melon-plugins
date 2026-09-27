@@ -36,7 +36,9 @@ albo bez roota, w `~/.config/wireplumber/wireplumber.conf.d/` — plik jest ten 
 * klik — panel, prawy klik — cykl ANC → Ambient → Wyłącz,
 * w panelu: sekcje HAŁAS, DŹWIĘK, ZASILANIE, JAKOŚĆ DŹWIĘKU,
 * z terminala: `./sonyctl anc ambient`, `./sonyctl eq bass`,
-  `./sonyctl auto-off removed`, `./sonyctl audio-profile headset` (patrz `sonyctl`).
+  `./sonyctl auto-off removed`, `./sonyctl audio-profile headset` (patrz `sonyctl`),
+* `./sonyctl release` oddaje sesję kontrolną aplikacji Sony w telefonie,
+  `./sonyctl claim` bierze ją z powrotem (albo przełącznik w panelu).
 
 ## Co jest sprawdzone na sprzęcie
 
