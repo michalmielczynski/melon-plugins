@@ -6,6 +6,7 @@
 !/melon.bar/
 !/melon.dock/
 !/melon.eye/
+!/melon.sony/
 
 # local backups / temp
 *.bak
@@ -13,3 +14,7 @@
 *.orig
 *~
 *.swp
+
+# melon.sony: runtime helpera i cache pythona
+.state/
+__pycache__/

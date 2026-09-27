@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "melon.sony",
+  "name": "Sony XM5",
+  "version": "1.0.0",
+  "author": "melon",
+  "license": "MIT",
+  "description": "Słuchawki Sony WF-1000XM5 w pasku Omarchy: bateria obu słuchawek i etui, ANC/Ambient z poziomem, korektor, DSEE Extreme, Speak-to-Chat, pauza po zdjęciu, wyłączanie po zdjęciu oraz jakość Bluetooth (LDAC 990 kbps).",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Sony XM5",
+    "description": "Bateria, ANC/Ambient, korektor, DSEE, Speak-to-Chat, zasilanie i jakość dźwięku po Bluetooth.",
+    "category": "Audio",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

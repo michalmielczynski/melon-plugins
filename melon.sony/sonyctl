@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Klient sesji kontrolnej melon.sony - to samo, co panel robi po stdin.
+# Gniazdo: $XDG_RUNTIME_DIR/melon-sony/ctl.sock (tworzy je sony-helper.py).
+#
+#   sonyctl state
+#   sonyctl anc anc|ambient|off
+#   sonyctl anc-level 12
+#   sonyctl eq bass            # preset
+#   sonyctl eq manual 3,0,0,0,0,0
+#   sonyctl dsee true
+#   sonyctl stc false
+#   sonyctl auto-pause true
+#   sonyctl auto-off removed|5|15|30|60|180|off
+#   sonyctl audio-profile a2dp|headset
+#   sonyctl power-off
+set -euo pipefail
+here="$(dirname "$(readlink -f "$0")")"
+exec /usr/bin/python3 "$here/sony-helper.py" ctl "$@"
