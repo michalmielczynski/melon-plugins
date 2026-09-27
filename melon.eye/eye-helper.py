@@ -29,6 +29,11 @@ Matching the window ("1:1"):
 
 Set MELON_EYE_DEBUG=1 to log tap candidates; MELON_EYE_DWT_MS to tune the
 re-enable window (default 1000 ms).
+
+Both loops are supervised: a crash is reported on stderr (the shell logs it to
+the journal) and the loop is restarted, so the helper can no longer die
+silently. Input devices are re-scanned every 2 s, so a hotplug or a
+suspend/resume brings the rings and key pills back without a shell reload.
 """
 import glob
 import json
@@ -39,6 +44,7 @@ import socket
 import subprocess
 import threading
 import time
+import traceback
 
 import evdev
 
@@ -153,8 +159,14 @@ def option_bool(key):
 
 
 def query_cursor():
+    global SOCK
     if not SOCK:
-        return None
+        # Hyprland may not have created its IPC socket yet when the shell starts
+        # us (boot, or a shell restarted before the compositor) — keep looking
+        # instead of going permanently silent.
+        SOCK = find_ipc_socket()
+        if not SOCK:
+            return None
     try:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.settimeout(1.0)
@@ -335,12 +347,21 @@ class TapTracker:
         return "L" if fingers <= 1 else "R"
 
 
-def click_loop():
+def classify_fds():
+    """(fds, touchpads, keyboard fds) for the devices present right now."""
     keyboards, mice, touchpads = classify_devices()
-
     fds = {dev.fd: dev for dev in mice}
     fds.update({dev.fd: dev for dev, _, _ in touchpads.values()})
     fds.update({dev.fd: dev for dev in keyboards})
+    return fds, touchpads, {dev.fd for dev in keyboards}
+
+
+def click_loop():
+    fds, touchpads, kbd_fds = classify_fds()
+    try:
+        known_paths = set(evdev.list_devices())
+    except Exception:
+        known_paths = set()
 
     touch_end = set()       # fds whose BTN_TOUCH was released this batch
     trackers = {}           # fd -> TapTracker (reconstructs the tap decision)
@@ -350,6 +371,7 @@ def click_loop():
     clickfinger = option_bool("input:touchpad:clickfinger_behavior")
     key_until = 0.0
     last_cfg_check = 0.0
+    last_dev_scan = 0.0
     held_mods = set()
 
     # --- multi-click buffer --------------------------------------------------
@@ -413,7 +435,15 @@ def click_loop():
     while True:
         # Brief poll so a pending multi-click buffer flushes promptly and config
         # refreshes quickly; 50 ms is imperceptible for an input daemon.
-        ready, _, _ = select.select(list(fds), [], [], 0.05)
+        try:
+            ready, _, _ = select.select(list(fds), [], [], 0.05)
+        except OSError:
+            # A watched device vanished (unplug, resume, re-enumeration) and the
+            # fd went bad: rebuild the device set on the next tick.
+            known_paths = set()
+            last_dev_scan = 0.0
+            time.sleep(0.05)
+            continue
         if not parent_alive():
             os._exit(0)
         now = time.monotonic()
@@ -426,15 +456,43 @@ def click_loop():
             clickfinger = option_bool("input:touchpad:clickfinger_behavior")
             last_cfg_check = now
 
+        # Re-classify when the set of input devices changed: after a hotplug or
+        # a suspend/resume the old fds are dead, which used to kill the rings
+        # (and the key pills) silently until the shell was reloaded.
+        if now - last_dev_scan > 2.0:
+            last_dev_scan = now
+            try:
+                paths = set(evdev.list_devices())
+            except Exception:
+                paths = None
+            if paths is not None and paths != known_paths:
+                known_paths = paths
+                fds, touchpads, kbd_fds = classify_fds()
+                trackers = {k: v for k, v in trackers.items() if k in fds}
+                held_btn = {k: v for k, v in held_btn.items() if k[0] in fds}
+
         flush_buf(now)
 
         for fd in ready:
+            if fd not in fds:
+                continue
             try:
-                events = fds[fd].read()
+                # list(): python-evdev's read() is a GENERATOR, so the actual
+                # device read (and its ENODEV, when a device goes away or comes
+                # back re-enumerated after a resume) happens while iterating —
+                # it must be consumed inside this try, otherwise the OSError
+                # escapes the loop and kills the helper.
+                events = list(fds[fd].read())
+            except BlockingIOError:
+                # Spurious wakeup: nothing pending after all, not a failure.
+                continue
             except OSError:
+                # Gone (or revoked): force a re-scan instead of spinning on it.
+                known_paths = set()
+                last_dev_scan = 0.0
                 continue
             is_touch = fd in touchpads
-            is_kbd = fd in {dev.fd for dev in keyboards}
+            is_kbd = fd in kbd_fds
             rx, ry = (touchpads[fd][1], touchpads[fd][2]) if is_touch else (31.0, 31.0)
             # Reconstruct taps from raw evdev per touchpad via a robust tracker
             # (MT slots + ABS_X/Y). We finish the gesture AFTER the whole batch
@@ -536,7 +594,26 @@ def click_loop():
                 tracker.reset()
 
 
+def run_forever(fn):
+    """Run fn() forever, restarting it after a logged failure.
+
+    Everything that killed this helper silently (a vanished device, a resume, a
+    broken stdout) used to leave the eye alive but the rings dead until the
+    plugin was reloaded by hand.
+    """
+    while True:
+        try:
+            fn()
+            return
+        except BrokenPipeError:
+            # stdout is gone: the shell dropped us, nobody is left to tell.
+            os._exit(0)
+        except Exception:
+            traceback.print_exc()
+            time.sleep(1.0)
+
+
 if __name__ == "__main__":
-    if SOCK:
-        threading.Thread(target=cursor_loop, daemon=True).start()
-    click_loop()
+    threading.Thread(target=run_forever, args=(cursor_loop,),
+                     daemon=True).start()
+    run_forever(click_loop)

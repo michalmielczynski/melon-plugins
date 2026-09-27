@@ -34,13 +34,57 @@ Item {
     running: true
     stdout: SplitParser { splitMarker: "\n" }
     stderr: SplitParser { splitMarker: "\n" }
+    // The helper is the ONLY source of cursor position, clicks and keys: when it
+    // exits (crash, a device that went away, the shell dropping its stdout) the
+    // rings and key pills go dead while the eye still sits in the bar. Bring it
+    // back instead of leaving the widget half-working until a manual reload.
+    onExited: function(exitCode, exitStatus) {
+      console.warn("melon.eye: helper exited (code " + exitCode + "), restarting")
+      helperRestart.restart()
+    }
+  }
+  Timer {
+    id: helperRestart
+    interval: 1000
+    onTriggered: helper.running = true
+  }
+  // Watchdog: the helper prints a cursor line at ~60 Hz. Once it has spoken,
+  // 8 s of silence means it is wedged (not merely waiting for Hyprland's IPC
+  // socket at boot) — restart it.
+  property bool helperSpoke: false
+  Timer {
+    id: helperWatchdog
+    interval: 1000
+    repeat: true
+    running: true
+    property double lastLine: 0
+    onTriggered: {
+      if (!root.helperSpoke || !helper.running) return
+      if (Date.now() - lastLine > 8000) {
+        console.warn("melon.eye: helper silent for 8 s, restarting")
+        lastLine = Date.now()
+        helper.running = false
+        helperRestart.restart()
+      }
+    }
   }
   Connections {
     target: helper.stdout
     function onRead(line) { root.onHelperLine(String(line).trim()) }
   }
+  Connections {
+    target: helper.stderr
+    // Helper tracebacks used to disappear into a SplitParser with no handler,
+    // which is why the death of the helper was invisible.
+    function onRead(line) {
+      var text = String(line).trim()
+      if (text) console.warn("melon.eye helper: " + text)
+    }
+  }
 
   function onHelperLine(line) {
+    helperWatchdog.lastLine = Date.now()
+    root.helperSpoke = true
     var parts = line.split(" ")
     if (parts[0] === "P" && parts.length === 3) {
       var px = Number(parts[1])
