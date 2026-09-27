@@ -871,9 +871,11 @@ class Helper:
         self.bus = dbus.SystemBus()
         self.session = Session(self, self.bus)
         self.session.register()
-        self.bus.add_signal_receiver(self.on_props, dbus_interface="org.freedesktop.DBus.Properties",
+        self.bus.add_signal_receiver(self.on_props, bus_name="org.bluez",
+                                     dbus_interface="org.freedesktop.DBus.Properties",
                                      signal_name="PropertiesChanged")
-        self.bus.add_signal_receiver(self.on_interfaces, dbus_interface="org.freedesktop.DBus.ObjectManager",
+        self.bus.add_signal_receiver(self.on_interfaces, bus_name="org.bluez",
+                                     dbus_interface="org.freedesktop.DBus.ObjectManager",
                                      signal_name="InterfacesAdded")
         self.retarget()
         GLib.timeout_add_seconds(15, self.retarget_tick)
@@ -916,7 +918,22 @@ class Helper:
     def device_iface(self):
         return dbus.Interface(self.bus.get_object("org.bluez", self.dev_path), "org.bluez.Device1")
 
-    def on_props(self, interface, changed, invalidated, path=None):
+    def on_props(self, *args, **kwargs):
+        """PropertiesChanged z BlueZ.
+
+        dbus-python dokłada `path` raz jako czwarty argument, raz jako kwargs
+        (a przy matchu bez sciezki wcale), wiec czytamy tolerancyjnie - inaczej
+        pierwszy sygnal z innej uslugi konczy sie TypeError i helper pada.
+        """
+        path = kwargs.get("path")
+        if len(args) > 3:
+            path = args[3]
+        interface = args[0] if args else kwargs.get("interface")
+        changed = args[1] if len(args) > 1 else (kwargs.get("changed_properties") or {})
+        if path is None:
+            # nie wiemy, ktore urzadzenie - pytamy BlueZ o stan
+            GLib.idle_add(self.refresh_all)
+            return
         if path != self.dev_path:
             return
         if interface == "org.bluez.Device1":
@@ -934,6 +951,12 @@ class Helper:
         elif interface == "org.bluez.Battery1":
             self.refresh_battery()
             self.publish()
+
+    def refresh_all(self):
+        self.refresh_device()
+        self.refresh_audio()
+        self.publish()
+        return False
 
     def on_interfaces(self, path, interfaces):
         if path == self.dev_path and "org.bluez.Battery1" in interfaces:
@@ -1045,8 +1068,8 @@ def main():
     helper.publish()
 
     GLib.io_add_watch(sys.stdin, GLib.IO_IN | GLib.IO_HUP, stdin_ready, helper)
-    GLib.timeout_add_seconds(5, lambda: (helper.refresh_audio(), helper.publish(), True)[1])
-    GLib.timeout_add_seconds(20, lambda: (helper.refresh_battery(), helper.publish(), True)[1])
+    GLib.timeout_add_seconds(20, lambda: (helper.refresh_audio(), helper.publish(), True)[1])
+    GLib.timeout_add_seconds(60, lambda: (helper.refresh_battery(), helper.publish(), True)[1])
     loop = GLib.MainLoop()
 
     def stop(*_):
