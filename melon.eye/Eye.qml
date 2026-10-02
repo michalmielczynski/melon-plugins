@@ -37,15 +37,41 @@ Item {
   readonly property real eyeSize: slotSize
   readonly property real pupilTravel: eyeSize * 0.18
   readonly property bool vertical: bar ? bar.vertical : false
-  // Pupil dilates as the cursor approaches the eye: pupilZoom goes 1.0 (cursor
-  // far away) up to maxPupilZoom (cursor at/near the eye), interpolated by how
-  // close the cursor is within pupilDilationRange (logical px). Capped so the
-  // widest, most off-centre pupil still stays inside the sclera.
+  // Pupil reacts to how far the cursor is, in two segments — one range can't do
+  // both jobs. A short one next to the eye (the old 250 px response, which is
+  // what reads as "it noticed me") and a long tail out to the far corner of the
+  // eye's screen, so moving away keeps constricting instead of freezing at the
+  // value reached a few hundred pixels out.
   property real pupilZoom: 1.0
   readonly property real pupilBaseSize: eyeSize * 0.46
   readonly property real pupilSize: pupilBaseSize * pupilZoom
-  readonly property real maxPupilZoom: 1.3
-  readonly property real pupilDilationRange: 250
+  readonly property real maxPupilZoom: 1.3   // cursor on the eye
+  readonly property real midPupilZoom: 1.05  // at pupilNearRange
+  readonly property real minPupilZoom: 0.7   // cursor at the far corner of the screen
+  readonly property real pupilNearRange: 250
+
+  // Distance that maps to full constriction: from the eye to the far corner of
+  // its own screen, so it holds for any resolution or multi-monitor layout.
+  function gazeReach(gp) {
+    // `typeof` guard: the widget runs inside Quickshell, but the offscreen
+    // render harness loads it without that module.
+    var screens = (typeof Quickshell !== "undefined" && Quickshell.screens) ? Quickshell.screens : []
+    var s = null
+    for (var i = 0; i < screens.length; i++) {
+      var c = screens[i]
+      if (c && c.width > 0 && c.height > 0
+          && gp.x >= c.x && gp.x < c.x + c.width
+          && gp.y >= c.y && gp.y < c.y + c.height) {
+        s = c
+        break
+      }
+    }
+    if (!s && root.bar && root.bar.window) s = root.bar.window.screen
+    if (!s || !(s.width > 0)) return 900
+    var ex = Math.max(gp.x - s.x, s.x + s.width - gp.x)
+    var ey = Math.max(gp.y - s.y, s.y + s.height - gp.y)
+    return Math.max(240, Math.hypot(ex, ey))
+  }
 
   // The eye must always read as an eye — a light sclera with dark ink — in
   // both dark and light themes. On a dark theme that is foreground/background
@@ -83,10 +109,16 @@ Item {
       var a = Math.atan2(dy, dx)
       pupilX = Math.cos(a) * pupilTravel
       pupilY = Math.sin(a) * pupilTravel
-      // Dilate as the cursor closes in: smaller distance -> bigger pupil.
+      // Dilation -> constriction with distance: wide open on the eye, narrower
+      // than the base drawing by the time the cursor reaches the far corner.
       var dist = Math.hypot(dx, dy)
-      var t = Math.max(0, 1 - dist / root.pupilDilationRange)
-      root.pupilZoom = 1 + t * (root.maxPupilZoom - 1)
+      var reach = Math.max(root.pupilNearRange + 1, root.gazeReach(gp))
+      var near = Math.min(dist, root.pupilNearRange) / root.pupilNearRange
+      var far = Math.min(1, Math.max(0, (dist - root.pupilNearRange)
+                                        / (reach - root.pupilNearRange)))
+      root.pupilZoom = root.maxPupilZoom
+                       - near * (root.maxPupilZoom - root.midPupilZoom)
+                       - far * (root.midPupilZoom - root.minPupilZoom)
     }
   }
 
