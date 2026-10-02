@@ -8,11 +8,15 @@ import "components"
 import "EyeState.js" as EyeState
 
 // Minimalist eye bar widget, in the Omarchy theme style:
+// - one filled sclera disc with a big dark pupil and a small specular glint
+//   (a cartoon eye: no extra framing ring, the disc edge is the outline),
 // - the pupil follows the mouse cursor (position from EyeState, fed by the
-//   overlay helper eye-helper.py),
+//   overlay helper eye-helper.py) and dilates as the cursor closes in,
 // - blinks randomly (not too often),
-// - clicking the eye toggles tracking on/off; when on, the overlay draws the
-//   click rings at the cursor (see Overlay.qml / RingLayer.qml).
+// - clicking the eye toggles tracking on/off (off = the same eye, dimmed);
+//   tracking on rings the eye in the theme accent as an "armed" cue, and the
+//   overlay draws the click rings at the cursor
+//   (see Overlay.qml / RingLayer.qml).
 
 Item {
   id: root
@@ -26,18 +30,29 @@ Item {
 
   readonly property color fg: root.bar ? root.bar.barForeground : Color.foreground
   // Match the bar's icon canvas size (16) so the eye doesn't tower over the
-  // other widgets, plus a hair for the ring to breathe.
+  // other widgets, plus a hair so the disc edge stays crisp against the bar.
   readonly property int slotSize: (Style.bar.iconCanvas > 0 ? Style.bar.iconCanvas : 16) + Style.space(1)
-  readonly property real pupilTravel: slotSize * 0.20
+  // The eye is one disc that fills the slot; proportions follow a classic
+  // cartoon eye: pupil ≈ 46% of the eye, glint ≈ 23% of the pupil, and the
+  // pupil can travel 18% of the eye off-centre without leaving the sclera.
+  readonly property real eyeSize: slotSize
+  readonly property real pupilTravel: eyeSize * 0.18
   readonly property bool vertical: bar ? bar.vertical : false
   // Pupil dilates as the cursor approaches the eye: pupilZoom goes 1.0 (cursor
   // far away) up to maxPupilZoom (cursor at/near the eye), interpolated by how
-  // close the cursor is within pupilDilationRange (logical px).
+  // close the cursor is within pupilDilationRange (logical px). Capped so the
+  // widest, most off-centre pupil still stays inside the sclera.
   property real pupilZoom: 1.0
-  readonly property real pupilBaseSize: (slotSize - Style.space(6)) * 0.32
+  readonly property real pupilBaseSize: eyeSize * 0.46
   readonly property real pupilSize: pupilBaseSize * pupilZoom
-  readonly property real maxPupilZoom: 1.8
+  readonly property real maxPupilZoom: 1.3
   readonly property real pupilDilationRange: 250
+
+  // Sclera is the theme foreground (a light disc on dark themes, dark on
+  // light ones); the pupil takes the background colour, and the glint paints
+  // itself back in the sclera colour so it always reads as a highlight.
+  readonly property color scleraColor: root.fg
+  readonly property color inkColor: Color.background
   readonly property int barBase: bar ? bar.barSize : slotSize
 
   // The widget spans the full bar height (like every other widget) and the
@@ -111,20 +126,24 @@ Item {
     height: root.barBase
     Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
-    // Framing ring: a sibling of the eye (outside the blink transform) so it
-    // stays a full circle while the eye blinks ("open" during a blink) and stays
-    // concentric with the eye — no squish/tilt from the blink. Same colour as
-    // the eye (barForeground) so it reads as one medallion.
+    // Tracker halo: the "armed" cue. Only present while tracking is on and in
+    // the theme accent colour. It is a sibling of the eye (outside the blink
+    // transform) so it stays a crisp circle while the eye squints, and it is a
+    // touch larger than the sclera so it reads as a ring around the eye rather
+    // than another edge on it.
     Rectangle {
-      id: eyeRing
-      anchors.left: parent.left
-      anchors.verticalCenter: parent.verticalCenter
-      width: root.slotSize
-      height: root.slotSize
+      id: trackerRing
+      anchors.horizontalCenter: eyeVisual.horizontalCenter
+      anchors.verticalCenter: eyeVisual.verticalCenter
+      width: root.eyeSize + Style.space(2)
+      height: width
       radius: width / 2
       color: "transparent"
-      border.width: Math.max(1, Style.spaceReal(1.5))
-      border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.85)
+      border.width: Math.max(1, Style.spaceReal(1))
+      border.color: Color.accent
+      opacity: root.tracking ? 0.9 : 0
+
+      Behavior on opacity { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
     }
 
     Item {
@@ -140,35 +159,45 @@ Item {
         yScale: 1
       }
 
-      // ON = negative (theme-aware): sclera filled with the theme foreground,
-      // pupil with the theme background — so on a dark theme the eye becomes a
-      // light disc, on a light theme a dark disc. OFF = the normal outline eye.
-      // The disc is held back from the ring so there's a clear gap between the
-      // frame and the eye.
+      // The eye: one filled disc, its own edge acting as the outline (the
+      // bar behind it is the dark "ink"). Tracking off only dims the whole
+      // eye — the drawing itself stays a complete, open eyeball.
       Rectangle {
         id: sclera
         anchors.centerIn: parent
-        width: root.slotSize - Style.space(6)
-        height: root.slotSize - Style.space(6)
+        width: root.eyeSize
+        height: root.eyeSize
         radius: width / 2
-        color: root.tracking ? root.fg : "transparent"
-        border.width: root.tracking ? 0 : Math.max(1, Style.spaceReal(1))
-        border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, root.tracking ? 0 : 0.55)
-      }
+        color: root.scleraColor
+        opacity: root.tracking ? 1 : 0.8
 
-      Rectangle {
-        id: pupil
-        width: root.pupilSize
-        height: root.pupilSize
-        radius: width / 2
-        color: root.tracking ? Color.background : Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.95)
-        x: root.slotSize / 2 - width / 2 + root.pupilX
-        y: root.slotSize / 2 - height / 2 + root.pupilY
+        Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
-        Behavior on x { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
-        Behavior on y { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
-        Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-        Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Rectangle {
+          id: pupil
+          width: root.pupilSize
+          height: root.pupilSize
+          radius: width / 2
+          color: root.inkColor
+          x: sclera.width / 2 - width / 2 + root.pupilX
+          y: sclera.height / 2 - height / 2 + root.pupilY
+
+          Behavior on x { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
+          Behavior on y { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
+          Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+          Behavior on height { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+
+          // Specular glint, pinned to the pupil's upper-right so it travels
+          // with the gaze and still reads as a reflection of the window.
+          Rectangle {
+            width: parent.width * 0.23
+            height: width
+            radius: width / 2
+            color: root.scleraColor
+            x: parent.width * 0.57 - width / 2
+            y: parent.height * 0.20 - height / 2
+          }
+        }
       }
     }
 
