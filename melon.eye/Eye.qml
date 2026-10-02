@@ -28,7 +28,6 @@ Item {
   property real pupilX: 0
   property real pupilY: 0
 
-  readonly property color fg: root.bar ? root.bar.barForeground : Color.foreground
   // Match the bar's icon canvas size (16) so the eye doesn't tower over the
   // other widgets, plus a hair so the disc edge stays crisp against the bar.
   readonly property int slotSize: (Style.bar.iconCanvas > 0 ? Style.bar.iconCanvas : 16) + Style.space(1)
@@ -48,11 +47,15 @@ Item {
   readonly property real maxPupilZoom: 1.3
   readonly property real pupilDilationRange: 250
 
-  // Sclera is the theme foreground (a light disc on dark themes, dark on
-  // light ones); the pupil takes the background colour, and the glint paints
-  // itself back in the sclera colour so it always reads as a highlight.
-  readonly property color scleraColor: root.fg
-  readonly property color inkColor: Color.background
+  // The eye must always read as an eye — a light sclera with dark ink — in
+  // both dark and light themes. On a dark theme that is foreground/background
+  // as they come; on a light theme the roles swap, or the eye renders as a
+  // negative (dark disc, light pupil) and stops looking like an eye. On a
+  // light theme the sclera takes the bar's own paper colour, so the disc also
+  // needs the ink rim to keep its edge.
+  readonly property bool lightTheme: Color.background.hslLightness > Color.foreground.hslLightness
+  readonly property color scleraColor: root.lightTheme ? Color.background : Color.foreground
+  readonly property color inkColor: root.lightTheme ? Color.foreground : Color.background
   readonly property int barBase: bar ? bar.barSize : slotSize
 
   // The widget spans the full bar height (like every other widget) and the
@@ -169,6 +172,11 @@ Item {
         height: root.eyeSize
         radius: width / 2
         color: root.scleraColor
+        // On a light theme the sclera is the same paper as the bar, so the
+        // ink rim is what draws the eye. On a dark theme the disc already
+        // stands out and a rim would only eat into it.
+        border.width: root.lightTheme ? Math.max(1, Style.spaceReal(1)) : 0
+        border.color: root.inkColor
         opacity: root.tracking ? 1 : 0.8
 
         Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
