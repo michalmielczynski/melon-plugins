@@ -307,11 +307,15 @@ BarWidget {
     onTriggered: root.refresh(true)
   }
 
+  // `status` bez parametrow = odpowiedz z cache mostka (CACHE_TTL). Z `--fast`
+  // kazde odpytywanie wymuszalo pelny odczyt centrali (~6,4 s) i blokowalo port
+  // RS485 innym klientom (apka na telefonie) -- przy dwoch klientach kolejka
+  // przekraczala ich timeouty.
   Timer {
     interval: 5000
     repeat: true
     running: root.popupOpen
-    onTriggered: send(["status", "--fast"])
+    onTriggered: send(["status"])
   }
 
   // Powolny retry w tle (2026-10-02). Jedyne odczyty to start (Component.onCompleted)
