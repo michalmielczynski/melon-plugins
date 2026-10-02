@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "melon.eye",
   "name": "melon.eye",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "author": "melon",
   "license": "MIT",
   "description": "Minimalist eye in the bar that follows the mouse cursor and blinks; when tracking is on, a small ring follows the cursor and click rings bloom at it for screencasts.",

@@ -30,7 +30,7 @@ Item {
   // off (off only dims the eye and disables the click rings).
   Process {
     id: helper
-    command: ["/usr/bin/python3", root.helperPath]
+    command: ["/usr/bin/python3", "-B", root.helperPath]
     running: true
     stdout: SplitParser { splitMarker: "\n" }
     stderr: SplitParser { splitMarker: "\n" }

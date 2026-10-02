@@ -34,11 +34,25 @@ Item {
   // far away) up to maxPupilZoom (cursor at/near the eye), interpolated by how
   // close the cursor is within pupilDilationRange (logical px).
   property real pupilZoom: 1.0
-  readonly property real pupilBaseSize: (slotSize - Style.space(6)) * 0.32
-  readonly property real pupilSize: pupilBaseSize * pupilZoom
   readonly property real maxPupilZoom: 1.8
   readonly property real pupilDilationRange: 250
   readonly property int barBase: bar ? bar.barSize : slotSize
+
+  // The middle circle: the sclera disc and the outline drawn inside its edge.
+  // The pupil is sized and steered against what is left in there, so it stays
+  // within the middle circle however far it wanders or however much it dilates
+  // (the wander bound is applied in the sync timer below).
+  readonly property real scleraSize: slotSize - Style.space(6)
+  readonly property real scleraInset: Math.max(1, Style.spaceReal(1))
+  readonly property real scleraInnerRadius: scleraSize / 2 - scleraInset
+  // A pupil that fills the circle has nowhere left to look: it is capped below
+  // the circle's inside, and a rim of the circle is kept clear of it.
+  readonly property real pupilBaseSize: scleraSize * 0.32
+  readonly property real maxPupilSize: scleraInnerRadius * 1.6
+  // Wide enough to read as "inside" once anti-aliased at bar size, and enough
+  // slack for the 90 ms glide, which lags behind the bound while dilating.
+  readonly property real pupilRim: slotSize * 0.05
+  readonly property real pupilSize: Math.min(pupilBaseSize * pupilZoom, maxPupilSize)
 
   // The widget spans the full bar height (like every other widget) and the
   // eye visual is centred inside it — otherwise the island Row top-aligns the
@@ -63,8 +77,13 @@ Item {
       var dx = EyeState.cursorX - gp.x
       var dy = EyeState.cursorY - gp.y
       var a = Math.atan2(dy, dx)
-      pupilX = Math.cos(a) * pupilTravel
-      pupilY = Math.sin(a) * pupilTravel
+      // Slide up to the rim of the middle circle, never past it: the wander is
+      // capped by the room left inside the circle at the pupil's current
+      // (animated) size, so a dilated pupil simply travels less.
+      var room = root.scleraInnerRadius - pupil.width / 2 - root.pupilRim
+      var travel = Math.max(0, Math.min(root.pupilTravel, room))
+      pupilX = Math.cos(a) * travel
+      pupilY = Math.sin(a) * travel
       // Dilate as the cursor closes in: smaller distance -> bigger pupil.
       var dist = Math.hypot(dx, dy)
       var t = Math.max(0, 1 - dist / root.pupilDilationRange)
@@ -104,10 +123,19 @@ Item {
   // ---- visuals: eye (centred in the icon slot) + live key pills to its right ----
   Item {
     id: layout
-    // Left-anchored (not centred): the eye stays put and key pills grow right.
-    anchors.left: parent.left
-    anchors.verticalCenter: parent.verticalCenter
-    width: root.barBase + Math.min(keys.implicitWidth, root.maxPills)
+    // Placed with x/width bindings, never with an anchor that flips to
+    // `undefined`: an anchor assigned `undefined` from a binding does not
+    // reliably let go, and the bar can turn from a column into a row live.
+    //   row    (horizontal bar): full span, eye at its left, key pills right;
+    //   column (bar.vertical): one icon slot, centred -- left-anchored it
+    //   hugged the slot's left edge and read as off-centre next to the icons
+    //   below it.
+    readonly property real span: root.vertical
+      ? root.slotSize
+      : root.barBase + Math.min(keys.implicitWidth, root.maxPills)
+    x: Math.round((parent.width - span) / 2)
+    y: Math.round((parent.height - root.barBase) / 2)
+    width: span
     height: root.barBase
     Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
 
@@ -148,11 +176,11 @@ Item {
       Rectangle {
         id: sclera
         anchors.centerIn: parent
-        width: root.slotSize - Style.space(6)
-        height: root.slotSize - Style.space(6)
+        width: root.scleraSize
+        height: root.scleraSize
         radius: width / 2
         color: root.tracking ? root.fg : "transparent"
-        border.width: root.tracking ? 0 : Math.max(1, Style.spaceReal(1))
+        border.width: root.tracking ? 0 : root.scleraInset
         border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, root.tracking ? 0 : 0.55)
       }
 
@@ -174,6 +202,8 @@ Item {
 
     KeyDisplay {
       id: keys
+      // A vertical bar has no space to the eye's right for the key pills.
+      visible: !root.vertical
       anchors.left: eyeVisual.right
       anchors.leftMargin: Style.spaceReal(3)
       anchors.verticalCenter: parent.verticalCenter
