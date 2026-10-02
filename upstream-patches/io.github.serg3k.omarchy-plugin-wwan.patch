@@ -1,0 +1,38 @@
+diff --git i/Model.js w/Model.js
+index ea7c3f4..e8bac58 100644
+--- i/Model.js
++++ w/Model.js
+@@ -334,7 +334,14 @@ function disconnectCommand(status) {
+   if (status && status.hasNmProfile && status.profileName) {
+     steps.push("nmcli connection down id " + shellQuote(status.profileName) + " || true")
+   }
+-  steps.push("mmcli -m any --simple-disconnect")
++  // Never use `mmcli -m any --disable` here: ModemManager implements it as the
++  // standard MBIM RADIO_STATE SET(off), which the Quectel RM520N-GL latches in
++  // firmware and never clears on SET(on) — power-up then fails forever with
++  // "Cannot power-up: sotware radio switch is OFF" / "Invalid transition".
++  // Only `mbimcli --quectel-set-radio-state=on` (with ModemManager stopped)
++  // recovers it. Host rfkill below is the reversible way to switch the radio off.
++  steps.push("mmcli -m any --simple-disconnect || true")
++  steps.push("rfkill block wwan || true")
+   return ["bash", "-c", steps.join("; ")]
+ }
+ 
+diff --git i/Service.qml w/Service.qml
+index 8ce332d..fb5402e 100644
+--- i/Service.qml
++++ w/Service.qml
+@@ -123,6 +123,13 @@ Item {
+     failedReason = String(parsed.failedReason || "")
+     connected = parsed.connected === true
+     if (_desired !== -1 && connected === (_desired === 1)) _desired = -1
++    // Nie trzymaj nieaktualnego bledu akcji: gdy widget widzi juz modem
++    // podlaczony i nie ma zadnej akcji w toku, czerwony komunikat z
++    // wczesniejszej proby (np. "Invalid transition") musi zniknac.
++    if (lastError !== "" && connected && _desired === -1) {
++      lastError = ""
++      actionStatus = ""
++    }
+   }
+ 
+   function toggleConnection() {

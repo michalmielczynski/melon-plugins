@@ -113,8 +113,8 @@ BarWidget {
   Process {
     id: helper
     command: root.mac !== ""
-      ? ["/usr/bin/python3", root.helperPath, "serve", "--mac", root.mac]
-      : ["/usr/bin/python3", root.helperPath, "serve"]
+      ? ["/usr/bin/python3", "-B", root.helperPath, "serve", "--mac", root.mac]
+      : ["/usr/bin/python3", "-B", root.helperPath, "serve"]
     running: true
     stdinEnabled: true
     stdout: SplitParser {
@@ -194,7 +194,11 @@ BarWidget {
   }
 
   // ---- chip w pasku ----
-  implicitWidth: barRow.implicitWidth + Style.space(14)
+  // Pionowy pasek (bar.vertical, np. Omacale po lewej): zostaje sam poziom
+  // baterii, bez ikony słuchawek — ikona + poziom + bolt błyskawicy to rząd
+  // szerszy niż pigułka i chip wychodził z osi. W poziomym pasku bez zmian.
+  readonly property bool barVertical: root.vertical
+  implicitWidth: barVertical ? barSize : barRow.implicitWidth + Style.space(14)
   implicitHeight: barSize
 
   Row {
@@ -205,6 +209,7 @@ BarWidget {
     Text {
       textFormat: Text.PlainText
       text: "󰋋"
+      visible: !root.barVertical
       color: root.online ? Color.accent : Qt.darker(root.barFg, 1.7)
       font.family: root.fontFamily
       font.pixelSize: Style.font.body
@@ -221,7 +226,7 @@ BarWidget {
     }
 
     Text {
-      visible: root.charging
+      visible: root.charging && !root.barVertical
       textFormat: Text.PlainText
       text: "󰂚"
       color: Color.accent

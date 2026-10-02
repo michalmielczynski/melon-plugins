@@ -1,0 +1,14 @@
+diff --git i/Panel.qml w/Panel.qml
+index 955a280..703b963 100644
+--- i/Panel.qml
++++ w/Panel.qml
+@@ -264,6 +264,9 @@ Panel {
+     text: root.barLabel()
+     fontSize: Style.font.caption
+     horizontalMargin: 6
++    // Smaller font reads better as secondary info: dim to ~75% brightness so it
++    // sits with the bar instead of shouting over the full-size widgets.
++    foreground: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.75)
+     active: root.warning || root.critical
+     activeColor: root.critical ? root.urgent : root.warningColor
+     tooltipText: root.tooltipText()

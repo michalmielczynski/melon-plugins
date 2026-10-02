@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "melon.rekuperacja",
+  "name": "Rekuperacja",
+  "version": "1.0.0",
+  "author": "melon",
+  "license": "MIT",
+  "description": "Sterowanie rekuperacją Thessla Green AirPack Home z paska Omarchy: on/off, biegi, tryb pracy, sezon, funkcje specjalne, bypass i EKO/KOMFORT — lokalnie, bez chmury.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Rekuperacja",
+    "description": "Status i sterowanie centralą wentylacyjną (przepływ, temperatury, tryby, bypass).",
+    "category": "Home",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

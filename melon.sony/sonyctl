@@ -15,4 +15,4 @@
 #   sonyctl power-off
 set -euo pipefail
 here="$(dirname "$(readlink -f "$0")")"
-exec /usr/bin/python3 "$here/sony-helper.py" ctl "$@"
+exec /usr/bin/python3 -B "$here/sony-helper.py" ctl "$@"

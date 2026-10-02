@@ -1,0 +1,16 @@
+diff --git i/components/Dock.qml w/components/Dock.qml
+index 8eefe56..9328a27 100644
+--- i/components/Dock.qml
++++ w/components/Dock.qml
+@@ -41,7 +41,10 @@ PanelWindow {
+   readonly property int itemSize: iconSize + 14
+   readonly property int reservedSize: iconSize + 24 + edgeMargin
+   readonly property int mainPadding: 10
+-  readonly property int revealThickness: 3
++  readonly property int revealThickness: {
++    var v = Number(settings.revealThickness)
++    return settings.revealThickness === undefined || isNaN(v) ? 3 : Math.max(1, Math.min(80, Math.round(v)))
++  }
+   readonly property int crossExtent: vertical
+     ? Math.ceil(iconSize * magnification + 80) + edgeMargin
+     : Math.ceil(iconSize * magnification + 48) + edgeMargin

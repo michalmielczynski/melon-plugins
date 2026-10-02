@@ -1,0 +1,70 @@
+diff --git i/Panel.qml w/Panel.qml
+index a7826bc..0f0fdf4 100644
+--- i/Panel.qml
++++ w/Panel.qml
+@@ -125,7 +125,7 @@ Panel {
+ 
+     pendingEventPayloadJson = JSON.stringify(payload)
+     createEventProc.command = [
+-      "python3",
++      "python3", "-B",
+       Qt.resolvedUrl("fetch-events.py").toString().replace(/^file:\/\//, ""),
+       "--create-event"
+     ]
+@@ -142,7 +142,7 @@ Panel {
+     }
+     pendingDeletePayloadJson = JSON.stringify(payload)
+     deleteEventProc.command = [
+-      "python3",
++      "python3", "-B",
+       Qt.resolvedUrl("fetch-events.py").toString().replace(/^file:\/\//, ""),
+       "--delete-event"
+     ]
+@@ -182,7 +182,7 @@ Panel {
+   function saveCalendars(list) {
+     pendingConfigJson = JSON.stringify(list, null, 2)
+     saveConfigProc.command = [
+-      "python3",
++      "python3", "-B",
+       Qt.resolvedUrl("fetch-events.py").toString().replace(/^file:\/\//, ""),
+       "--save-config"
+     ]
+@@ -342,8 +342,18 @@ Panel {
+   // Summoning by hotkey moves no pointer, so a hover the bar was still
+   // holding must not keep the center indicators revealed behind the panel.
+   function setCenterHoverRevealSuppressed(value) {
+-    if (root.bar && "centerHoverRevealSuppressed" in root.bar)
+-      root.bar.centerHoverRevealSuppressed = value
++    if (!root.bar) return
++    // Omarchy trzyma stan w zapisywalnym `_centerHoverRevealSuppressed`; publiczne
++    // `centerHoverRevealSuppressed` jest tylko do odczytu. Przypisanie do niego
++    // rzucało TypeError przy każdym syncu (co ~5 s) i zaśmiecało log; Omacale w
++    // ogóle nie ma tego API w fasadzie -- tam po prostu nic nie robimy.
++    try {
++      if (typeof root.bar.setCenterHoverRevealSuppressed === "function")
++        root.bar.setCenterHoverRevealSuppressed(value)
++      else if ("_centerHoverRevealSuppressed" in root.bar)
++        root.bar._centerHoverRevealSuppressed = value
++    } catch (e) {
++    }
+   }
+ 
+   function syncCalendars(force) {
+@@ -566,7 +576,7 @@ Panel {
+ 
+   Process {
+     id: fetchProc
+-    command: ["python3", Qt.resolvedUrl("fetch-events.py").toString().replace(/^file:\/\//, "")]
++    command: ["python3", "-B", Qt.resolvedUrl("fetch-events.py").toString().replace(/^file:\/\//, "")]
+     stdout: StdioCollector {
+       waitForEnd: true
+       onStreamFinished: {
+@@ -638,7 +648,7 @@ Panel {
+ 
+   Process {
+     id: googleAuthProc
+-    command: ["python3", Qt.resolvedUrl("google-auth.py").toString().replace(/^file:\/\//, "")]
++    command: ["python3", "-B", Qt.resolvedUrl("google-auth.py").toString().replace(/^file:\/\//, "")]
+     stdout: StdioCollector {
+       waitForEnd: true
+       onStreamFinished: root.syncCalendars(true)

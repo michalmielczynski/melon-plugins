@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "melon.media-keep-awake",
+  "name": "Media Keep Awake",
+  "version": "1.0.0",
+  "author": "melon",
+  "description": "Suppresses the Omarchy idle screensaver and lock while MPRIS media (e.g. YouTube) is playing",
+  "kinds": [
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml"
+  }
+}

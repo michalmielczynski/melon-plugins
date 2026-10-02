@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "melon.lights",
+  "name": "Lights",
+  "version": "1.0.0",
+  "author": "melon",
+  "license": "MIT",
+  "description": "Control IKEA Dirigera lights from the Omarchy bar: room on/off, brightness, color temperature and color hue, fully local.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Lights",
+    "description": "On/off, brightness, color temperature and hue for IKEA Dirigera lights.",
+    "category": "Home",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

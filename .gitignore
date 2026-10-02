@@ -1,20 +1,30 @@
-# Track ONLY melon.bar and melon.dock; ignore every other plugin, nested repos,
-# and local backup/temp files. This keeps the repo focused on OUR custom work.
-
+# This repo is the melon.* plugin collection for Omarchy (see README.md).
+#
+# Every OTHER directory in here is someone else's clone: it has its own upstream
+# remote, so it stays out of this repo entirely. Where we patch one of those
+# clones locally, the diff is kept in upstream-patches/ instead of vendoring it.
 /*
 !/.gitignore
+!/LICENSE
+!/README.md
+
+!/melon.audio/
 !/melon.bar/
 !/melon.dock/
 !/melon.eye/
+!/melon.lights/
+!/melon.menu/
+!/melon.media-keep-awake/
+!/melon.rekuperacja/
 !/melon.sony/
+!/upstream-patches/
 
-# local backups / temp
-*.bak
-*.bak.*
+# local backup copies of files (git itself is the history)
+*.bak*
 *.orig
 *~
 *.swp
 
-# melon.sony: runtime helpera i cache pythona
+# helpers: runtime state and python caches
 .state/
 __pycache__/
